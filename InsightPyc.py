@@ -10,6 +10,7 @@ from Tkinter import *
 from tkMessageBox import *
 from ttk import *
 
+import OpCode
 from PyCode import PyCodeInfo
 from RunPyc import PythonVM
 
@@ -185,7 +186,7 @@ class PycParser(object):
 
         pycode_object = self.read_object()
         pycode_object.version = MAGIC2VERSION.get(magic, 'unknow version')
-        pycode_object.mtime = mtime
+        pycode_object.mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(mtime))
 
         return pycode_object
 
@@ -194,7 +195,7 @@ class PycShowApplication(Frame):
 
     def __init__(self, master=None):
         Frame.__init__(self, master)
-
+        self.source_file = None
         self.parent = None
         self.pack()
         self.create_widgets()
@@ -212,15 +213,78 @@ class PycShowApplication(Frame):
         self.run_button.pack(side="left", expand=True)
         bottom.pack(side="bottom", fill="x")
 
-    def insert_params(self, parent, text, note):
-        return self.show_tree.insert(parent, 'end', text="{:<30}{}".format(text, note))
+    def insert_params(self, parent, text, note, tab=2):
+        return self.show_tree.insert(parent, 'end', text="{}{}{}".format(text, '\t' * tab, note))
+
+    def dis_code(self, pycode_object, show_tree, parent_id, co_code=None, last=None):
+        last = last or 0
+        co_code = co_code or memoryview(pycode_object.co_code)
+
+        while co_code:
+            code = ord(co_code[0])
+            opname = OpCode.op_code[code]
+            if OpCode.has_arg(code):
+                index = (ord(co_code[2]) << 8) + ord(co_code[1])
+                if code in OpCode.has_const():
+                    arg = pycode_object.co_consts[index]
+                elif code in OpCode.has_names():
+                    arg = pycode_object.co_names[index]
+
+                outstr = "{}\t{}\t\t{}".format(last, opname, index)
+                if 'arg' in locals():
+                    outstr += "\t({})".format(arg)
+                    del arg
+
+                last += 3
+                co_code = co_code[3:]
+            else:
+                outstr = "{}\t{}".format(last, opname)
+                last += 1
+                co_code = co_code[1:]
+
+            show_tree.insert(parent_id, 'end', text=outstr)
+
+        return last
+
+    def dis_code_with_source(self, pycode_object, show_tree, parent_id, filename):
+
+        last = 0
+        lineno = 1
+        source = open(filename)
+        lntoab = memoryview(pycode_object.co_lnotab)
+        co_code = memoryview(pycode_object.co_code)
+
+        for _ in xrange(pycode_object.co_firstlineno - 1):
+            source.readline()
+            lineno += 1
+
+        while lntoab:
+            code_offset = ord(lntoab[0])
+            souce_offset = ord(lntoab[1])
+
+            for _ in xrange(souce_offset):
+                line = source.readline()
+                if line.strip():
+                    show_tree.insert(parent_id, 'end', text="*{}\t{}".format(lineno, line))
+                lineno += 1
+
+            last = self.dis_code(pycode_object, show_tree, parent_id, co_code=co_code[:code_offset], last=last)
+            co_code = co_code[code_offset:]
+            lntoab = lntoab[2:]
+
+        for line in source:
+            show_tree.insert(parent_id, 'end', text="*{}\t{}".format(lineno, line))
+            lineno += 1
+        self.dis_code(pycode_object, show_tree, parent_id, co_code=co_code, last=last)
+
+        source.close()
 
     def show_pyc_code(self, pycode_object, parent_id=''):
         show_tree = self.show_tree
         if not parent_id:
             parent = show_tree.insert(parent_id, 0, text=pycode_object.co_filename, open=True)
-            show_tree.insert(parent, 'end', text="版本信息:{}".format(pycode_object.version))
-            show_tree.insert(parent, 'end', text="修改时间:{}".format(time.ctime(pycode_object.mtime)))
+            self.insert_params(parent, "版本信息", pycode_object.version, tab=3)
+            self.insert_params(parent, "修改时间", pycode_object.mtime, tab=3)
             self.parent = parent
         else:
             parent = show_tree.insert(parent_id, 0, text=pycode_object.co_name, open=False)
@@ -234,7 +298,7 @@ class PycShowApplication(Frame):
         tmp_id = self.insert_params(parent, "co_stacksize", "需要的栈空间大小")
         show_tree.insert(tmp_id, 'end', text="value\t\t{}".format(pycode_object.co_stacksize))
 
-        tmp_id = self.insert_params(parent, "co_flags", "各类标志")
+        tmp_id = self.insert_params(parent, "co_flags", "各类标志", tab=3)
         show_tree.insert(tmp_id, 'end', text="value\t\t{}".format(hex(pycode_object.co_flags)))
 
         tmp_id = self.insert_params(parent, "co_firstlineno", "代码块在对应源文件中的起始行")
@@ -247,14 +311,14 @@ class PycShowApplication(Frame):
         for const_item in pycode_object.co_consts:
             if isinstance(const_item, PyCodeInfo):
                 self.show_pyc_code(const_item, tmp_id)
-            elif isinstance(const_item, (str, int, tuple)):
+            elif isinstance(const_item, (str, int, tuple, long)):
                 show_tree.insert(tmp_id, 'end', text=str(const_item))
             elif type(const_item) == bytes:
                 show_tree.insert(tmp_id, 'end', text=const_item)
             elif const_item == None:
                 show_tree.insert(tmp_id, 'end', text='None')
             else:
-                print(const_item)
+                print("unhandle type", type(const_item))
 
         tmp_id = self.insert_params(parent, "co_names", "所有变量名")
         for name in pycode_object.co_names:
@@ -272,12 +336,16 @@ class PycShowApplication(Frame):
         for name in pycode_object.co_freevars:
             show_tree.insert(tmp_id, 'end', text=name)
 
-        self.insert_params(parent, "co_code", "字节码指令")
-        self.insert_params(parent, "co_lnotab", "字节码指令与源代码行号对应关系")
+        tmp_id = self.insert_params(parent, "co_code", "字节码指令", tab=3)
+        if self.source_file:
+            self.dis_code_with_source(pycode_object, show_tree, tmp_id, self.source_file)
+        else:
+            self.dis_code(pycode_object, show_tree, tmp_id)
 
     def generate_pyc(self, py_name):
         pyc_name = None
         fp = None
+
         try:
             real_name = os.path.basename(py_name.split('.')[0])
             fp, pathname, description = imp.find_module(real_name)
@@ -288,6 +356,7 @@ class PycShowApplication(Frame):
         except Exception as error:
             showerror("错误信息", "{}".format(error))
 
+        self.source_file = real_name + '.py'
         return pyc_name
 
     def show_pyc(self, pyc_path):
@@ -310,18 +379,19 @@ class PycShowApplication(Frame):
         pyc_path = filedialog.askopenfilename()
         if not pyc_path:
             return
+        self.source_file = None
         pyc_path = pyc_path.encode()
         self.show_pyc(pyc_path)
 
     def run_code(self):
-        PythonVM(self.pycode_object).run()
+        PythonVM(self.pycode_object).run_code()
 
 
 def main():
     root = Tk()
     root.title("Pyc Insight")
     root.geometry('600x400')
-    root.resizable(width=True, height=False)
+    root.resizable(width=True, height=True)
     app = PycShowApplication(master=root)
     app.mainloop()
 
