@@ -4,11 +4,14 @@ import sys
 import imp
 import time
 import struct
+import tkFont
 import tkinter.filedialog as filedialog
+from tkinter.scrolledtext import ScrolledText
 
 from Tkinter import *
 from tkMessageBox import *
 from ttk import *
+
 
 import OpCode
 from PyCode import PyCodeInfo
@@ -200,18 +203,27 @@ class PycShowApplication(Frame):
         self.pack()
         self.create_widgets()
 
-    def create_widgets(self):
+    def set_style(self):
+        self.background = "#272822"
+        self.main_color = "#A7EC21"
+        self.font = tkFont.Font(family='Helvetica', size=15, weight='bold')
+        Style().configure("Treeview", background=self.background, foreground=self.main_color, font=self.font)
+        Style().configure("TLabel", background=self.background, foreground="#52E3F6", font=self.font)
 
-        label = Label(text='PYC结构').pack(side='top', fill='x')
+    def create_widgets(self):
+        self.set_style()
+
+        label = Label(text='PYC结构').pack(fill='x')
+
         self.show_tree = Treeview()
-        self.show_tree.pack(expand=True, fill='both', after=label)
+        self.show_tree.pack(fill='both', expand=1)
 
         bottom = Frame()
         Button(bottom, text="打开PY文件", command=self.open_py).pack(side="left", expand=True)
         Button(bottom, text="打开PYC文件", command=self.open_pyc).pack(side="left", expand=True)
         self.run_button = Button(bottom, text="运行代码", state="disable", command=self.run_code)
         self.run_button.pack(side="left", expand=True)
-        bottom.pack(side="bottom", fill="x")
+        bottom.pack(fill="x")
 
     def insert_params(self, parent, text, note, tab=2):
         return self.show_tree.insert(parent, 'end', text="{}{}{}".format(text, '\t' * tab, note))
@@ -383,14 +395,25 @@ class PycShowApplication(Frame):
         pyc_path = pyc_path.encode()
         self.show_pyc(pyc_path)
 
+    def outstream(self, message, newline=True):
+        message = str(message)
+        message += ('\n' if newline else ' ')
+        self.out_stream.insert(END, message)
+
     def run_code(self):
-        PythonVM(self.pycode_object).run_code()
+
+        if not hasattr(self, "out_stream"):
+
+            self.out_stream = ScrolledText(background=self.background, font=self.font, foreground=self.main_color)
+            self.out_stream.pack(fill='x')
+
+        PythonVM(self.pycode_object, self.outstream).run_code()
 
 
 def main():
     root = Tk()
     root.title("Pyc Insight")
-    root.geometry('600x400')
+    root.geometry('800x400')
     root.resizable(width=True, height=True)
     app = PycShowApplication(master=root)
     app.mainloop()

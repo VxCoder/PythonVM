@@ -1,5 +1,6 @@
 # coding=utf-8
 import sys
+import operator
 
 import OpCode
 
@@ -48,8 +49,9 @@ class PythonVM(object):
     PythonVM 类似于CPU,执行code,切换运行时frame
     """
 
-    def __init__(self, pycode_object):
+    def __init__(self, pycode_object, outstream):
         self.pycode_object = pycode_object
+        self.outstream = outstream
 
     def parse_code_and_args(self):
         co_code = self.frame.f_code.co_code
@@ -70,12 +72,20 @@ class PythonVM(object):
 
     def dispatch(self, opname, arg):
 
-        op_func = getattr(self, opname, None)
-        if not op_func:
-            print "not support {} now".format(opname)
-            return
+        if opname.startswith('UNARY_'):
+            self.unaryOperator(opname[6:])
+        elif opname.startswith('BINARY_'):
+            self.binaryOperator(opname[7:])
+        elif opname.startswith('INPLACE_'):
+            self.inplaceOperator(opname[8:])
+        else:
+            op_func = getattr(self, opname, None)
 
-        return op_func(arg) if arg != None else op_func()
+            if not op_func:
+                print "not support {} now".format(opname)
+                return
+
+            return op_func(arg) if arg != None else op_func()
 
     def run_code(self):
         thread_state = PyThreadState()
@@ -101,6 +111,9 @@ class PythonVM(object):
     def top(self):
         return self.frame.f_stack[-1]
 
+    def set_top(self, value):
+        self.frame.f_stack[-1] = value
+
     def push(self, value):
         self.frame.f_stack.append(value)
 
@@ -114,6 +127,50 @@ class PythonVM(object):
             return ret
         else:
             return []
+
+    UNARY_OPERATORS = {
+        'POSITIVE': operator.pos,  # +a
+        'NEGATIVE': operator.neg,  # -a
+        'NOT':      operator.not_,  # not a
+        'CONVERT':  repr,
+        'INVERT':   operator.invert,  # ~ a
+    }
+
+    def unaryOperator(self, op):
+        value = self.top()
+        self.set_top(self.UNARY_OPERATORS[op](value))
+
+    BINARY_OPERATORS = {
+        'POWER':    pow,          # a**b
+        'MULTIPLY': operator.mul,  # a * b
+        'DIVIDE':   operator.div,  # a / b    __future__.division 没有生效
+        'FLOOR_DIVIDE': operator.floordiv,  # a // b
+        'TRUE_DIVIDE':  operator.truediv,  # a/b  __future__.division 生效
+        'MODULO':   operator.mod,           # a % b
+        'ADD':      operator.add,           # a + b
+        'SUBTRACT': operator.sub,           # a - b
+        'SUBSCR':   operator.getitem,       # a[b]
+        'LSHIFT':   operator.lshift,        # a << b
+        'RSHIFT':   operator.rshift,        # a >> b
+        'AND':      operator.and_,          # a & b
+        'XOR':      operator.xor,           # a ^ b
+        'OR':       operator.or_,           # a | b
+    }
+
+    def binaryOperator(self, op):
+        x, y = self.popn(2)
+        self.push(self.BINARY_OPERATORS[op](x, y))
+
+    def inplaceOperator(self, op):
+        y = self.pop()
+        x = self.top()
+        self.set_top(self.BINARY_OPERATORS[op](x, y))
+
+    def POP_TOP(self):
+        self.pop()
+
+    def NOP(self):
+        pass
 
     def DUP_TOP(self):
         self.push(self.top())
@@ -174,10 +231,10 @@ class PythonVM(object):
 
     def PRINT_ITEM(self):
         value = self.pop()
-        print value,
+        self.outstream(value, False)
 
     def PRINT_NEWLINE(self):
-        print ''
+        self.outstream('')
 
     def RETURN_VALUE(self):
         ret_value = self.pop()
