@@ -79,6 +79,10 @@ class PycParser(object):
 
     def read_INT_type(self):
         int_data = self.read_long()
+        # 暂时处理4字节整数
+        if int_data >> 31:
+            int_data = - ((int_data ^ 0xffffffff) + 1)
+
         return int_data
 
     def read_STRING_type(self):
@@ -204,6 +208,9 @@ class PycShowApplication(Frame):
         self.pack()
         self.create_widgets()
 
+#         pyc_path = self.generate_pyc("if_control.py")
+#         self.show_pyc(pyc_path)
+
     def set_style(self):
         self.background = "#272822"
         self.main_color = "#A7EC21"
@@ -226,7 +233,7 @@ class PycShowApplication(Frame):
         self.show_tree['yscrollcommand'] = vbar.set
         vbar['command'] = self.show_tree.yview
 
-        show_frame.pack(fill=X)
+        show_frame.pack(fill=BOTH, expand=True)
 
         bottom = Frame()
         Button(bottom, text="打开PY文件", command=self.open_py).pack(side=LEFT, expand=True)
@@ -235,22 +242,8 @@ class PycShowApplication(Frame):
         self.run_button.pack(side=LEFT, expand=True)
         bottom.pack(fill=X)
 
-        Label(text='运行输出').pack(fill=X)
-
-        out_frame = Frame()
-        self.out_vbar = Scrollbar(out_frame)
-        self.out_vbar.pack(side=RIGHT, fill=Y)
-
-        self.out_stream = Text(out_frame, background=self.background, font=self.font, foreground=self.main_color)
-        self.out_stream.pack(side=LEFT,  fill=BOTH, expand=True)
-
-        self.out_stream['yscrollcommand'] = self.out_vbar.set
-        self.out_vbar['command'] = self.out_stream.yview
-
-        out_frame.pack(fill=X)
-
-    def insert_params(self, parent, text, note, tab=2):
-        return self.show_tree.insert(parent, END, text="{}{}{}".format(text, '\t' * tab, note))
+    def insert_params(self, parent, text, note, tab=2, open=False):
+        return self.show_tree.insert(parent, END, open=open, text="{}{}{}".format(text, '\t' * tab, note))
 
     def dis_code(self, pycode_object, show_tree, parent_id, co_code=None, last=None):
         last = last or 0
@@ -266,7 +259,10 @@ class PycShowApplication(Frame):
                 elif code in OpCode.has_names():
                     arg = pycode_object.co_names[index]
 
-                outstr = "{}\t{}\t\t{}".format(last, opname, index)
+                if len(opname) > 12:
+                    outstr = "{}\t{}\t\t{}".format(last, opname, index)
+                else:
+                    outstr = "{}\t{}\t\t\t{}".format(last, opname, index)
                 if 'arg' in locals():
                     outstr += "\t({})".format(arg)
                     del arg
@@ -372,7 +368,7 @@ class PycShowApplication(Frame):
         for name in pycode_object.co_freevars:
             show_tree.insert(tmp_id, END, text=name)
 
-        tmp_id = self.insert_params(parent, "co_code", "字节码指令", tab=3)
+        tmp_id = self.insert_params(parent, "co_code", "字节码指令", tab=3, open=not parent_id)
         if self.source_file:
             self.dis_code_with_source(pycode_object, show_tree, tmp_id, self.source_file)
         else:
@@ -429,13 +425,28 @@ class PycShowApplication(Frame):
 
     def run_code(self):
 
+        if not hasattr(self, "out_vbar"):
+            Label(text='运行输出').pack(fill=X)
+
+            out_frame = Frame()
+            self.out_vbar = Scrollbar(out_frame)
+            self.out_vbar.pack(side=RIGHT, fill=Y)
+
+            self.out_stream = Text(out_frame, background=self.background, font=self.font, foreground=self.main_color)
+            self.out_stream.pack(side=LEFT,  fill=BOTH, expand=True)
+
+            self.out_stream['yscrollcommand'] = self.out_vbar.set
+            self.out_vbar['command'] = self.out_stream.yview
+
+            out_frame.pack(fill=X)
+
         PythonVM(self.pycode_object, self.outstream).run_code()
 
 
 def main():
     root = Tk()
     root.title("Pyc Insight")
-    root.geometry('800x400')
+    root.geometry('600x500')
     root.resizable(width=True, height=True)
     app = PycShowApplication(master=root)
     app.mainloop()

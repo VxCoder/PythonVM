@@ -128,6 +128,12 @@ class PythonVM(object):
         else:
             return []
 
+    def jumpto(self, value):
+        self.frame.f_lasti = value
+
+    def jumpby(self, value):
+        self.frame.f_lasti += value
+
     UNARY_OPERATORS = {
         'POSITIVE': operator.pos,  # +a
         'NEGATIVE': operator.neg,  # -a
@@ -165,6 +171,38 @@ class PythonVM(object):
         y = self.pop()
         x = self.top()
         self.set_top(self.BINARY_OPERATORS[op](x, y))
+
+    COMPARE_OPERATORS = [
+        operator.lt,
+        operator.le,
+        operator.eq,
+        operator.ne,
+        operator.gt,
+        operator.ge,
+        lambda x, y: x in y,
+        lambda x, y: x not in y,
+        lambda x, y: x is y,
+        lambda x, y: x is not y,
+        lambda x, y: issubclass(x, Exception) and issubclass(x, y),
+    ]
+
+    def COMPARE_OP(self, opnum):
+        y = self.pop()
+        x = self.top()
+        self.set_top(self.COMPARE_OPERATORS[opnum](x, y))
+
+    def POP_JUMP_IF_FALSE(self, addr):
+        value = self.pop()
+        if not value:
+            self.jumpto(addr)
+
+    def POP_JUMP_IF_TRUE(self, addr):
+        val = self.pop()
+        if val:
+            self.jumpto(addr)
+
+    def JUMP_FORWARD(self, addr):
+        self.jumpby(addr)
 
     def POP_TOP(self):
         self.pop()
