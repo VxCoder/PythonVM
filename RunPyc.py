@@ -99,7 +99,7 @@ class PythonVM(object):
             opname, arg = self.parse_code_and_args()
             result = self.dispatch(opname, arg)
             if result:
-                print "return value:{}\n".format(result)
+                self.outstream("return value:{}".format(result))
                 break
 
     def get_const(self, index):

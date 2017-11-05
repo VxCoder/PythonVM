@@ -16,6 +16,7 @@ from ttk import *
 import OpCode
 from PyCode import PyCodeInfo
 from RunPyc import PythonVM
+from PIL.ImageOps import expand
 
 MAGIC2VERSION = {
     20121: 'Python 1.5/1.5.1/1.5.2',
@@ -206,27 +207,50 @@ class PycShowApplication(Frame):
     def set_style(self):
         self.background = "#272822"
         self.main_color = "#A7EC21"
-        self.font = tkFont.Font(family='Helvetica', size=15, weight='bold')
+        self.font = tkFont.Font(family='Helvetica', size=12, weight='bold')
         Style().configure("Treeview", background=self.background, foreground=self.main_color, font=self.font)
         Style().configure("TLabel", background=self.background, foreground="#52E3F6", font=self.font)
 
     def create_widgets(self):
         self.set_style()
 
-        label = Label(text='PYC结构').pack(fill='x')
+        Label(text='PYC结构').pack(fill=X)
 
-        self.show_tree = Treeview()
-        self.show_tree.pack(fill='both', expand=1)
+        show_frame = Frame()
+        vbar = Scrollbar(show_frame)
+        vbar.pack(side=RIGHT, fill=Y)
+
+        self.show_tree = Treeview(show_frame)
+        self.show_tree.pack(side=LEFT,  fill=BOTH, expand=True)
+
+        self.show_tree['yscrollcommand'] = vbar.set
+        vbar['command'] = self.show_tree.yview
+
+        show_frame.pack(fill=X)
 
         bottom = Frame()
-        Button(bottom, text="打开PY文件", command=self.open_py).pack(side="left", expand=True)
-        Button(bottom, text="打开PYC文件", command=self.open_pyc).pack(side="left", expand=True)
+        Button(bottom, text="打开PY文件", command=self.open_py).pack(side=LEFT, expand=True)
+        Button(bottom, text="打开PYC文件", command=self.open_pyc).pack(side=LEFT, expand=True)
         self.run_button = Button(bottom, text="运行代码", state="disable", command=self.run_code)
-        self.run_button.pack(side="left", expand=True)
-        bottom.pack(fill="x")
+        self.run_button.pack(side=LEFT, expand=True)
+        bottom.pack(fill=X)
+
+        Label(text='运行输出').pack(fill=X)
+
+        out_frame = Frame()
+        self.out_vbar = Scrollbar(out_frame)
+        self.out_vbar.pack(side=RIGHT, fill=Y)
+
+        self.out_stream = Text(out_frame, background=self.background, font=self.font, foreground=self.main_color)
+        self.out_stream.pack(side=LEFT,  fill=BOTH, expand=True)
+
+        self.out_stream['yscrollcommand'] = self.out_vbar.set
+        self.out_vbar['command'] = self.out_stream.yview
+
+        out_frame.pack(fill=X)
 
     def insert_params(self, parent, text, note, tab=2):
-        return self.show_tree.insert(parent, 'end', text="{}{}{}".format(text, '\t' * tab, note))
+        return self.show_tree.insert(parent, END, text="{}{}{}".format(text, '\t' * tab, note))
 
     def dis_code(self, pycode_object, show_tree, parent_id, co_code=None, last=None):
         last = last or 0
@@ -254,7 +278,7 @@ class PycShowApplication(Frame):
                 last += 1
                 co_code = co_code[1:]
 
-            show_tree.insert(parent_id, 'end', text=outstr)
+            show_tree.insert(parent_id, END, text=outstr)
 
         return last
 
@@ -277,7 +301,7 @@ class PycShowApplication(Frame):
             for _ in xrange(souce_offset):
                 line = source.readline()
                 if line.strip():
-                    show_tree.insert(parent_id, 'end', text="*{}\t{}".format(lineno, line))
+                    show_tree.insert(parent_id, END, text="*{}\t{}".format(lineno, line))
                 lineno += 1
 
             last = self.dis_code(pycode_object, show_tree, parent_id, co_code=co_code[:code_offset], last=last)
@@ -285,7 +309,7 @@ class PycShowApplication(Frame):
             lntoab = lntoab[2:]
 
         for line in source:
-            show_tree.insert(parent_id, 'end', text="*{}\t{}".format(lineno, line))
+            show_tree.insert(parent_id, END, text="*{}\t{}".format(lineno, line))
             lineno += 1
         self.dis_code(pycode_object, show_tree, parent_id, co_code=co_code, last=last)
 
@@ -302,57 +326,59 @@ class PycShowApplication(Frame):
             parent = show_tree.insert(parent_id, 0, text=pycode_object.co_name, open=False)
 
         tmp_id = self.insert_params(parent, "co_argcount", "入参个数,不包括*args")
-        show_tree.insert(tmp_id, 'end', '', text="value\t\t{}".format(pycode_object.co_argcount))
+        show_tree.insert(tmp_id, END, text="value\t\t{}".format(pycode_object.co_argcount))
 
         tmp_id = self.insert_params(parent, "co_nlocals", "所有局部变量的个数,包括入参")
-        show_tree.insert(tmp_id, 'end', text="value\t\t{}".format(pycode_object.co_nlocals))
+        show_tree.insert(tmp_id, END, text="value\t\t{}".format(pycode_object.co_nlocals))
 
         tmp_id = self.insert_params(parent, "co_stacksize", "需要的栈空间大小")
-        show_tree.insert(tmp_id, 'end', text="value\t\t{}".format(pycode_object.co_stacksize))
+        show_tree.insert(tmp_id, END, text="value\t\t{}".format(pycode_object.co_stacksize))
 
         tmp_id = self.insert_params(parent, "co_flags", "各类标志", tab=3)
-        show_tree.insert(tmp_id, 'end', text="value\t\t{}".format(hex(pycode_object.co_flags)))
+        show_tree.insert(tmp_id, END, text="value\t\t{}".format(hex(pycode_object.co_flags)))
 
         tmp_id = self.insert_params(parent, "co_firstlineno", "代码块在对应源文件中的起始行")
-        show_tree.insert(tmp_id, 'end', text="value\t\t{}".format(pycode_object.co_firstlineno))
+        show_tree.insert(tmp_id, END, text="value\t\t{}".format(pycode_object.co_firstlineno))
 
         tmp_id = self.insert_params(parent, "co_filename", "完整源文件路径名")
-        show_tree.insert(tmp_id, 'end', text="value\t\t{}".format(pycode_object.co_filename))
+        show_tree.insert(tmp_id, END, text="value\t\t{}".format(pycode_object.co_filename))
 
         tmp_id = self.insert_params(parent, "co_consts", "所有常量数据(所包含的代码块数据也在其中)")
         for const_item in pycode_object.co_consts:
             if isinstance(const_item, PyCodeInfo):
                 self.show_pyc_code(const_item, tmp_id)
             elif isinstance(const_item, (str, int, tuple, long)):
-                show_tree.insert(tmp_id, 'end', text=str(const_item))
+                show_tree.insert(tmp_id, END, text=str(const_item))
             elif type(const_item) == bytes:
-                show_tree.insert(tmp_id, 'end', text=const_item)
+                show_tree.insert(tmp_id, END, text=const_item)
             elif const_item == None:
-                show_tree.insert(tmp_id, 'end', text='None')
+                show_tree.insert(tmp_id, END, text='None')
             else:
                 print("unhandle type", type(const_item))
 
         tmp_id = self.insert_params(parent, "co_names", "所有变量名")
         for name in pycode_object.co_names:
-            show_tree.insert(tmp_id, 'end', text=name)
+            show_tree.insert(tmp_id, END, text=name)
 
         tmp_id = self.insert_params(parent, "co_varnames", "约束变量 -本代码段中被赋值，但没有被内层代码段引用的变量")
         for name in pycode_object.co_varnames:
-            show_tree.insert(tmp_id, 'end', text=name)
+            show_tree.insert(tmp_id, END, text=name)
 
         tmp_id = self.insert_params(parent, "co_cellvars", "内层约束变量 -本代码段中被赋值，且被内层代码段引用的变量")
         for name in pycode_object.co_cellvars:
-            show_tree.insert(tmp_id, 'end', text=name)
+            show_tree.insert(tmp_id, END, text=name)
 
         tmp_id = self.insert_params(parent, "co_freevars", "自由变量- 本代码段中被引用，在外层代码段中被赋值的变量")
         for name in pycode_object.co_freevars:
-            show_tree.insert(tmp_id, 'end', text=name)
+            show_tree.insert(tmp_id, END, text=name)
 
         tmp_id = self.insert_params(parent, "co_code", "字节码指令", tab=3)
         if self.source_file:
             self.dis_code_with_source(pycode_object, show_tree, tmp_id, self.source_file)
         else:
             self.dis_code(pycode_object, show_tree, tmp_id)
+
+        self.show_tree.insert(parent, END, text="")  # 留白
 
     def generate_pyc(self, py_name):
         pyc_name = None
@@ -399,13 +425,9 @@ class PycShowApplication(Frame):
         message = str(message)
         message += ('\n' if newline else ' ')
         self.out_stream.insert(END, message)
+        self.out_stream.see(END)
 
     def run_code(self):
-
-        if not hasattr(self, "out_stream"):
-
-            self.out_stream = ScrolledText(background=self.background, font=self.font, foreground=self.main_color)
-            self.out_stream.pack(fill='x')
 
         PythonVM(self.pycode_object, self.outstream).run_code()
 
