@@ -3,51 +3,23 @@ import sys
 import operator
 
 import OpCode
-
-
-class PyThreadState(object):
-    """
-    PyThreadState 类似于线程
-    """
-
-    def __init__(self):
-        self.frame = None
-
-
-class PyFrame(object):
-    """
-    python 运行栈对象
-    f_back:          前一个运行栈
-    f_code:          代码段
-    f_builtins:      内建命名空间
-    f_globals:       全局命名空间
-    f_locals:        局部命名空间
-    f_stack:         运行时栈
-    f_lasti:         最后执行的代码地址
-    """
-
-    def __init__(self, thread_state, f_code, f_globals, f_locals):
-        self.f_back = thread_state.frame  # 之前的运行栈
-
-        self.f_code = f_code                # 运行代码
-
-        self.f_locals = f_locals          # 局部命名空间
-        self.f_globals = f_globals        # 全局命名空间
-        self.f_builtins = None            # 内建命名空间
-
-        if self.f_back == None:
-            self.f_builtins = __builtins__
-        else:
-            self.f_builtins = self.f_back.f_builtins
-
-        self.f_stack = []
-        self.f_lasti = -1
+from PyObject import PyThreadState, PyFrame, PyBlock
 
 
 class PythonVM(object):
     """
     PythonVM 类似于CPU,执行code,切换运行时frame
     """
+    
+    WHY_NOT =       None    #  No error 
+    WHY_EXCEPTION = 0x0002  #  Exception occurred 
+    WHY_RERAISE =   0x0004  # Exception re-raised by 'finally'
+    WHY_RETURN =    0x0008  # 'return' statement 
+    WHY_BREAK =     0x0010  # 'break' statement 
+    WHY_CONTINUE =  0x0020  # 'continue' statement
+    WHY_YIELD =     0x0040  # 'yield' operator 
+    
+    TYPE_SETUP_LOOP = 'loop'
 
     def __init__(self, pycode_object, outstream):
         self.pycode_object = pycode_object
@@ -71,21 +43,27 @@ class PythonVM(object):
         return opname, arg
 
     def dispatch(self, opname, arg):
+        why = None
+        
+        try:
+            if opname.startswith('UNARY_'):
+                self.unaryOperator(opname[6:])
+            elif opname.startswith('BINARY_'):
+                self.binaryOperator(opname[7:])
+            elif opname.startswith('INPLACE_'):
+                self.inplaceOperator(opname[8:])
+            else:
+                op_func = getattr(self, opname, None)
+    
+                if not op_func:
+                    print "not support {} now".format(opname)
+                else:
+                    why = op_func(arg) if arg != None else op_func()
+                    
+        except Exception:
+            why = self.WHY_EXCEPTION
 
-        if opname.startswith('UNARY_'):
-            self.unaryOperator(opname[6:])
-        elif opname.startswith('BINARY_'):
-            self.binaryOperator(opname[7:])
-        elif opname.startswith('INPLACE_'):
-            self.inplaceOperator(opname[8:])
-        else:
-            op_func = getattr(self, opname, None)
-
-            if not op_func:
-                print "not support {} now".format(opname)
-                return
-
-            return op_func(arg) if arg != None else op_func()
+        return why
 
     def run_code(self):
         thread_state = PyThreadState()
@@ -97,11 +75,20 @@ class PythonVM(object):
         self.frame.f_lasti += 1
         while True:
             opname, arg = self.parse_code_and_args()
-            result = self.dispatch(opname, arg)
-            if result:
-                self.outstream("return value:{}".format(result))
+            result= self.dispatch(opname, arg)
+            if result == self.WHY_RETURN:
+                self.outstream("return value:{}".format(self.ret_value))
                 break
-
+            elif result == self.WHY_BREAK:
+                block = self.pop_block(self.frame)
+    
+                while self.stack_level() > block.b_level:
+                    self.pop()
+                    
+                if block.b_type == self.TYPE_SETUP_LOOP:
+                    self.jumpto(block.b_handler)
+                    
+                    
     def get_const(self, index):
         return self.frame.f_code.co_consts[index]
 
@@ -128,11 +115,24 @@ class PythonVM(object):
         else:
             return []
 
-    def jumpto(self, value):
-        self.frame.f_lasti = value
+    def jumpto(self, dest):
+        self.frame.f_lasti = dest
 
-    def jumpby(self, value):
-        self.frame.f_lasti += value
+    def jumpby(self, dest):
+        self.frame.f_lasti += dest
+        
+    def stack_level(self):
+        return len(self.frame.f_stack)
+        
+    def setup_block(self, frame, b_type, b_handler, b_level):
+        block = PyBlock(b_type, b_handler, b_level)
+        frame.block_stack.append(block)
+        
+    def pop_block(self, frame):
+       return frame.block_stack.pop() 
+   
+    def detail_print(self, name, *args):
+        print name
 
     UNARY_OPERATORS = {
         'POSITIVE': operator.pos,  # +a
@@ -190,20 +190,67 @@ class PythonVM(object):
         y = self.pop()
         x = self.top()
         self.set_top(self.COMPARE_OPERATORS[opnum](x, y))
+        
+        # cpython 会预测下条跳转指令, 这里不做类似优化了
 
     def POP_JUMP_IF_FALSE(self, addr):
+        self.detail_print("POP_JUMP_IF_FALSE")
+        
         value = self.pop()
         if not value:
             self.jumpto(addr)
 
     def POP_JUMP_IF_TRUE(self, addr):
+        self.detail_print("POP_JUMP_IF_TRUE")
+        
         val = self.pop()
         if val:
             self.jumpto(addr)
 
     def JUMP_FORWARD(self, addr):
         self.jumpby(addr)
+        
+    def SETUP_LOOP(self, dest):
+        self.detail_print("SETUP_LOOP")
+        self.setup_block(self.frame, self.TYPE_SETUP_LOOP, self.frame.f_lasti+dest,  self.stack_level())
 
+    def GET_ITER(self):
+        self.detail_print("GET_ITER")
+        value = self.top()
+        value_iter = iter(value)
+        if value_iter:
+            self.set_top(value_iter)
+        else:
+            self.pop()
+            
+    def FOR_ITER(self, dest):
+        self.detail_print("FOR_ITER")
+        
+        it = self.top()
+        
+        try:
+            value = next(it)
+            self.push(value)
+        except StopIteration:
+            self.pop()
+            self.jumpby(dest)
+            
+    def POP_BLOCK(self):
+        self.detail_print("POP_BLOCK")
+        
+        block = self.pop_block(self.frame)
+        while self.stack_level() > block.b_level:
+            self.pop()
+            
+    def BREAK_LOOP(self):
+        self.detail_print("BREAK_LOOP")
+        return  self.WHY_BREAK
+            
+    def JUMP_ABSOLUTE(self, dest):
+        self.detail_print("JUMP_ABSOLUTE")
+        
+        self.jumpto(dest)
+    
     def POP_TOP(self):
         self.pop()
 
@@ -275,5 +322,5 @@ class PythonVM(object):
         self.outstream('')
 
     def RETURN_VALUE(self):
-        ret_value = self.pop()
-        return str(ret_value)
+        self.ret_value = self.pop()
+        return self.WHY_RETURN

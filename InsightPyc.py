@@ -3,20 +3,21 @@ import os
 import sys
 import imp
 import time
+import marshal
 import struct
 import tkFont
 import tkinter.filedialog as filedialog
 from tkinter.scrolledtext import ScrolledText
-
 from Tkinter import *
 from tkMessageBox import *
 from ttk import *
 
 
 import OpCode
-from PyCode import PyCodeInfo
-from RunPyc import PythonVM
-from PIL.ImageOps import expand
+from PyObject import PyCodeInfo
+from PyVM import PythonVM
+import py_compile
+
 
 MAGIC2VERSION = {
     20121: 'Python 1.5/1.5.1/1.5.2',
@@ -203,13 +204,14 @@ class PycShowApplication(Frame):
 
     def __init__(self, master=None):
         Frame.__init__(self, master)
-        self.source_file = None
+ 
         self.parent = None
         self.pack()
         self.create_widgets()
 
-#         pyc_path = self.generate_pyc("if_control.py")
-#         self.show_pyc(pyc_path)
+        py_path = "D:/Git/PythonVM/test/exception.py"
+        pyc_path = self.generate_pyc(py_path)
+        self.show_pyc(pyc_path, py_path)
 
     def set_style(self):
         self.background = "#272822"
@@ -259,10 +261,11 @@ class PycShowApplication(Frame):
                 elif code in OpCode.has_names():
                     arg = pycode_object.co_names[index]
 
-                if len(opname) > 12:
+                if len(opname) > 13:
                     outstr = "{}\t{}\t\t{}".format(last, opname, index)
                 else:
                     outstr = "{}\t{}\t\t\t{}".format(last, opname, index)
+                    
                 if 'arg' in locals():
                     outstr += "\t({})".format(arg)
                     del arg
@@ -311,7 +314,7 @@ class PycShowApplication(Frame):
 
         source.close()
 
-    def show_pyc_code(self, pycode_object, parent_id=''):
+    def show_pyc_code(self, pycode_object, parent_id='', py_path=None):
         show_tree = self.show_tree
         if not parent_id:
             parent = show_tree.insert(parent_id, 0, text=pycode_object.co_filename, open=True)
@@ -342,7 +345,7 @@ class PycShowApplication(Frame):
         tmp_id = self.insert_params(parent, "co_consts", "所有常量数据(所包含的代码块数据也在其中)")
         for const_item in pycode_object.co_consts:
             if isinstance(const_item, PyCodeInfo):
-                self.show_pyc_code(const_item, tmp_id)
+                self.show_pyc_code(const_item, tmp_id, py_path)
             elif isinstance(const_item, (str, int, tuple, long)):
                 show_tree.insert(tmp_id, END, text=str(const_item))
             elif type(const_item) == bytes:
@@ -369,51 +372,64 @@ class PycShowApplication(Frame):
             show_tree.insert(tmp_id, END, text=name)
 
         tmp_id = self.insert_params(parent, "co_code", "字节码指令", tab=3, open=not parent_id)
-        if self.source_file:
-            self.dis_code_with_source(pycode_object, show_tree, tmp_id, self.source_file)
+        if py_path:
+            self.dis_code_with_source(pycode_object, show_tree, tmp_id, py_path)
         else:
             self.dis_code(pycode_object, show_tree, tmp_id)
 
         self.show_tree.insert(parent, END, text="")  # 留白
+        
+    
 
-    def generate_pyc(self, py_name):
+    def generate_pyc(self, py_path):
         pyc_name = None
-        fp = None
-
+ 
         try:
-            real_name = os.path.basename(py_name.split('.')[0])
-            fp, pathname, description = imp.find_module(real_name)
-            imp.load_module(py_name, fp, pathname, description)
-            pyc_name = real_name + '.pyc'
-        except ImportError as error:
-            showerror("错误信息", "{} 生成 pyc 文件失败 {}".format(py_name, error))
+            # 将源码编译成pycode对象
+            with open(py_path) as source_fp:
+                source = source_fp.read()
+                code = compile(source, py_path, 'exec')
+                
+            # 将pycode对象保存为pyc格式
+            pyc_name = os.path.splitext(py_path)[0] + '.pyc'
+            with open(pyc_name, "wb") as code_fp:
+                # 按照ceval.c 写入方式
+                code_fp.write(imp.get_magic())
+                py_compile.wr_long(code_fp, 0)
+                marshal.dump(code, code_fp)
+                code_fp.flush()
+                code_fp.seek(4, 0)
+                py_compile.wr_long(code_fp, int(time.time()))
+                
+        except IOError as error:
+            showerror("生成PYC失败", "文件处理失败!{}".format(error))
         except Exception as error:
-            showerror("错误信息", "{}".format(error))
-
-        self.source_file = real_name + '.py'
+            showerror("生成PYC失败", "{}".format(error))
+            
         return pyc_name
 
-    def show_pyc(self, pyc_path):
+    def show_pyc(self, pyc_path, py_path=None):
         self.pycode_object = PycParser(pyc_path).insign()
         if self.parent:
             self.show_tree.delete(self.parent)
             self.parent = None
         self.run_button['state'] = 'normal'
-        self.show_pyc_code(self.pycode_object)
+        self.show_pyc_code(self.pycode_object, py_path=py_path)
 
     def open_py(self):
         py_path = filedialog.askopenfilename()
         if not py_path:
             return
         py_path = py_path.encode()
-        pyc_path = self.generate_pyc(py_path)
-        self.show_pyc(pyc_path)
+        pyc_path  = self.generate_pycpy_path       
+        if pyc_path :
+            self.show_pyc(pyc_path, py_path)
 
     def open_pyc(self):
         pyc_path = filedialog.askopenfilename()
         if not pyc_path:
             return
-        self.source_file = None
+  
         pyc_path = pyc_path.encode()
         self.show_pyc(pyc_path)
 

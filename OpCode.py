@@ -49,7 +49,7 @@ op_code = {
     65: "BINARY_XOR",               #
     66: "BINARY_OR",                #
     67: "INPLACE_POWER",            #
-    68: "GET_ITER",
+    68: "GET_ITER",                 #
     70: "PRINT_EXPR",
     71: "PRINT_ITEM",               #
     72: "PRINT_NEWLINE",            #
@@ -67,14 +67,14 @@ op_code = {
     84: "IMPORT_STAR",
     85: "EXEC_STMT",
     86: "YIELD_VALUE",
-    87: "POP_BLOCK",
+    87: "POP_BLOCK",                #
     88: "END_FINALLY",
     89: "BUILD_CLASS",
     90: "HAVE_ARGUMENT",            # Opcodes from here have an argument:
     90: "STORE_NAME",               #
     91: "DELETE_NAME",
     92: "UNPACK_SEQUENCE",
-    93: "FOR_ITER",
+    93: "FOR_ITER",                 #
     94: "LIST_APPEND",
     95: "STORE_ATTR",
     96: "DELETE_ATTR",
@@ -88,18 +88,18 @@ op_code = {
     104: "BUILD_SET",
     105: "BUILD_MAP",               #
     106: "LOAD_ATTR",
-    107: "COMPARE_OP",
+    107: "COMPARE_OP",              #
     108: "IMPORT_NAME",
     109: "IMPORT_FROM",
-    110: "JUMP_FORWARD",
+    110: "JUMP_FORWARD",            #
     111: "JUMP_IF_FALSE_OR_POP",
     112: "JUMP_IF_TRUE_OR_POP",
-    113: "JUMP_ABSOLUTE",
-    114: "POP_JUMP_IF_FALSE",
-    115: "POP_JUMP_IF_TRUE",
+    113: "JUMP_ABSOLUTE",           #
+    114: "POP_JUMP_IF_FALSE",       #
+    115: "POP_JUMP_IF_TRUE",        #
     116: "LOAD_GLOBAL",
     119: "CONTINUE_LOOP",
-    120: "SETUP_LOOP",
+    120: "SETUP_LOOP",              #
     121: "SETUP_EXCEPT",
     122: "SETUP_FINALLY",
     124: "LOAD_FAST",
