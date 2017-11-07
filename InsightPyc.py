@@ -6,6 +6,8 @@ import time
 import marshal
 import struct
 import tkFont
+import py_compile
+
 import tkinter.filedialog as filedialog
 from tkinter.scrolledtext import ScrolledText
 from Tkinter import *
@@ -16,7 +18,7 @@ from ttk import *
 import OpCode
 from PyObject import PyCodeInfo
 from PyVM import PythonVM
-import py_compile
+
 
 
 MAGIC2VERSION = {
@@ -209,9 +211,9 @@ class PycShowApplication(Frame):
         self.pack()
         self.create_widgets()
 
-        py_path = "D:/Git/PythonVM/test/exception.py"
-        pyc_path = self.generate_pyc(py_path)
-        self.show_pyc(pyc_path, py_path)
+#         py_path = "D:/Git/PythonVM/test/exception_control.py"
+#         pyc_path = self.generate_pyc(py_path)
+#         self.show_pyc(pyc_path, py_path)
 
     def set_style(self):
         self.background = "#272822"
@@ -295,9 +297,9 @@ class PycShowApplication(Frame):
 
         while lntoab:
             code_offset = ord(lntoab[0])
-            souce_offset = ord(lntoab[1])
+            source_offset = ord(lntoab[1])
 
-            for _ in xrange(souce_offset):
+            for _ in xrange(source_offset):
                 line = source.readline()
                 if line.strip():
                     show_tree.insert(parent_id, END, text="*{}\t{}".format(lineno, line))
@@ -409,11 +411,12 @@ class PycShowApplication(Frame):
         return pyc_name
 
     def show_pyc(self, pyc_path, py_path=None):
+       
         self.pycode_object = PycParser(pyc_path).insign()
         if self.parent:
             self.show_tree.delete(self.parent)
             self.parent = None
-        self.run_button['state'] = 'normal'
+        self.run_button.config(state='normal')
         self.show_pyc_code(self.pycode_object, py_path=py_path)
 
     def open_py(self):
@@ -421,7 +424,7 @@ class PycShowApplication(Frame):
         if not py_path:
             return
         py_path = py_path.encode()
-        pyc_path  = self.generate_pycpy_path       
+        pyc_path  = self.generate_pyc(py_path)       
         if pyc_path :
             self.show_pyc(pyc_path, py_path)
 
@@ -448,8 +451,8 @@ class PycShowApplication(Frame):
             self.out_vbar = Scrollbar(out_frame)
             self.out_vbar.pack(side=RIGHT, fill=Y)
 
-            self.out_stream = Text(out_frame, background=self.background, font=self.font, foreground=self.main_color)
-            self.out_stream.pack(side=LEFT,  fill=BOTH, expand=True)
+            self.out_stream = Text(out_frame, height = 6, background=self.background, font=self.font, foreground=self.main_color)
+            self.out_stream.pack(side=LEFT,  fill=X, expand=True)
 
             self.out_stream['yscrollcommand'] = self.out_vbar.set
             self.out_vbar['command'] = self.out_stream.yview
@@ -462,7 +465,7 @@ class PycShowApplication(Frame):
 def main():
     root = Tk()
     root.title("Pyc Insight")
-    root.geometry('600x500')
+    root.geometry('800x400')
     root.resizable(width=True, height=True)
     app = PycShowApplication(master=root)
     app.mainloop()

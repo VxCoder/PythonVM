@@ -1,6 +1,7 @@
 # coding=utf-8
 import sys
 import operator
+import traceback
 
 import OpCode
 from PyObject import PyThreadState, PyFrame, PyBlock
@@ -20,6 +21,8 @@ class PythonVM(object):
     WHY_YIELD =     0x0040  # 'yield' operator 
     
     TYPE_SETUP_LOOP = 'loop'
+    TYPE_SETUP_FINALLY = 'finally'
+    TYPE_SETUP_EXCEPT = 'except'
 
     def __init__(self, pycode_object, outstream):
         self.pycode_object = pycode_object
@@ -61,6 +64,8 @@ class PythonVM(object):
                     why = op_func(arg) if arg != None else op_func()
                     
         except Exception:
+            self.last_exception = sys.exc_info()[:2] + (None,)
+            print traceback.print_tb(sys.exc_info()[2])
             why = self.WHY_EXCEPTION
 
         return why
@@ -75,19 +80,51 @@ class PythonVM(object):
         self.frame.f_lasti += 1
         while True:
             opname, arg = self.parse_code_and_args()
-            result= self.dispatch(opname, arg)
-            if result == self.WHY_RETURN:
-                self.outstream("return value:{}".format(self.ret_value))
-                break
-            elif result == self.WHY_BREAK:
+            
+            why = self.dispatch(opname, arg)
+            
+            if why == self.WHY_NOT:
+                continue
+            
+            if why == self.WHY_EXCEPTION:
+                #保存异常Frame,展开异常堆栈用
+                pass
+            
+            if why == self.WHY_RERAISE:
+                why = self.WHY_EXCEPTION
+                
+                
+            while (why != self.WHY_NOT) and len(self.frame.block_stack):
                 block = self.pop_block(self.frame)
-    
+              
+                # 恢复到进入代码块前的堆栈状态
                 while self.stack_level() > block.b_level:
                     self.pop()
-                    
-                if block.b_type == self.TYPE_SETUP_LOOP:
+                
+                # 针对块内的break操作
+                if block.b_type ==  self.TYPE_SETUP_LOOP and why == self.WHY_BREAK:
+                    why = self.WHY_NOT
                     self.jumpto(block.b_handler)
-                    
+                    break
+                
+                # 块内有异常发生
+                if (block.b_type == self.TYPE_SETUP_FINALLY ) or (block.b_type == self.TYPE_SETUP_EXCEPT and why == self.WHY_EXCEPTION):
+                    if why == self.WHY_EXCEPTION:
+                        exc, val, tb = self.last_exception
+                        self.push(tb)
+                        self.push(val)
+                        self.push(exc)
+                        
+                    why = self.WHY_NOT
+                    self.jumpto(block.b_handler)
+                    break
+         
+            if why != self.WHY_NOT:
+                break
+        
+        if why == self.WHY_EXCEPTION:
+            self.outstream("{}: {}".format(self.last_exception[0], self.last_exception[1]))
+            
                     
     def get_const(self, index):
         return self.frame.f_code.co_consts[index]
@@ -187,6 +224,7 @@ class PythonVM(object):
     ]
 
     def COMPARE_OP(self, opnum):
+        self.detail_print("COMPARE_OP")
         y = self.pop()
         x = self.top()
         self.set_top(self.COMPARE_OPERATORS[opnum](x, y))
@@ -208,14 +246,61 @@ class PythonVM(object):
             self.jumpto(addr)
 
     def JUMP_FORWARD(self, addr):
+        self.detail_print("JUMP_FORWARD")
         self.jumpby(addr)
         
     def SETUP_LOOP(self, dest):
         self.detail_print("SETUP_LOOP")
         self.setup_block(self.frame, self.TYPE_SETUP_LOOP, self.frame.f_lasti+dest,  self.stack_level())
 
+    def SETUP_FINALLY(self, dest):
+        self.detail_print("SETUP_FINALLY")
+        self.setup_block(self.frame, self.TYPE_SETUP_FINALLY, self.frame.f_lasti+dest,  self.stack_level())
+
+    def SETUP_EXCEPT(self, dest):
+        self.detail_print("SETUP_EXCEPT")
+        self.setup_block(self.frame, self.TYPE_SETUP_EXCEPT, self.frame.f_lasti+dest,  self.stack_level())
+
+    # no test
+    def RAISE_VARARGS(self, argc):
+        self.detail_print("RAISE_VARARGS")
+        
+        exctype = None
+        value = None
+        tb = None
+        
+        if argc == 1:
+            exctype = self.pop()
+        elif argc == 2:
+            value = self.pop()
+            exctype = self.pop()
+        elif argc == 3:
+            tb = self.pop()
+            value = self.pop()
+            exctype = self.pop()
+        elif argc != 0:
+            print "!!!!!!"
+            
+        self.last_exception = exctype, val, tb 
+        
+        return self.WHY_EXCEPTION
+        
+    def END_FINALLY(self):
+        self.detail_print("END_FINALLY")
+        v = self.pop()
+        
+        # 异常没有处理掉时，退出时重新抛出
+        if v is None:
+            return self.WHY_NOT
+        elif issubclass(v, BaseException):
+            val = self.pop()
+            tb = self.pop()
+            self.last_exception = v, val, tb
+            return self.WHY_RERAISE
+     
     def GET_ITER(self):
         self.detail_print("GET_ITER")
+        
         value = self.top()
         value_iter = iter(value)
         if value_iter:
@@ -244,6 +329,7 @@ class PythonVM(object):
             
     def BREAK_LOOP(self):
         self.detail_print("BREAK_LOOP")
+        
         return  self.WHY_BREAK
             
     def JUMP_ABSOLUTE(self, dest):
@@ -252,45 +338,66 @@ class PythonVM(object):
         self.jumpto(dest)
     
     def POP_TOP(self):
+        self.detail_print("POP_TOP")
+        
         self.pop()
 
     def NOP(self):
+        self.detail_print("NOP")
+        
         pass
 
     def DUP_TOP(self):
+        self.detail_print("DUP_TOP")
         self.push(self.top())
 
     def ROT_TWO(self):
+        self.detail_print("ROT_TWO")
+        
         a, b = self.popn(2)
         self.push(b, a)
 
     def ROT_THREE(self):
+        self.detail_print("ROT_THREE")
+        
         a, b, c = self.popn(3)
         self.push(c, a, b)
 
     def ROT_FOUR(self):
+        self.detail_print("ROT_FOUR")
+        
         a, b, c, d = self.popn(4)
         self.push(d, a, b, c)
 
     def LOAD_CONST(self, index):
+        self.detail_print("LOAD_CONST")
+        
         value = self.get_const(index)
         self.push(value)
 
     def STORE_NAME(self, index):
+        self.detail_print("STORE_NAME")
+        
         name = self.get_name(index)
         value = self.pop()
         self.frame.f_locals[name] = value
 
     def STORE_MAP(self):
+        self.detail_print("STORE_MAP")
+        
         map, val, key = self.popn(3)
         map[key] = val
         self.push(map)
 
     def STORE_SUBSCR(self):
+        self.detail_print("STORE_SUBSCR")
+        
         val, map, subscr = self.popn(3)
         map[subscr] = val
 
     def LOAD_NAME(self, index):
+        self.detail_print("LOAD_NAME")
+        
         name = self.get_name(index)
         frame = self.frame
         if name in frame.f_locals:
@@ -304,6 +411,7 @@ class PythonVM(object):
         self.push(value)
 
     def BUILD_MAP(self, _):
+        self.detail_print("BUILD_MAP")
         self.push({})
 
     def BUILD_TUPLE(self, num):

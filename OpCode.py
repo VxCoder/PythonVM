@@ -60,7 +60,7 @@ op_code = {
     77: "INPLACE_AND",              #
     78: "INPLACE_XOR",              #
     79: "INPLACE_OR",               #
-    80: "BREAK_LOOP",
+    80: "BREAK_LOOP",               #
     81: "WITH_CLEANUP",
     82: "LOAD_LOCALS",
     83: "RETURN_VALUE",             #
@@ -68,7 +68,7 @@ op_code = {
     85: "EXEC_STMT",
     86: "YIELD_VALUE",
     87: "POP_BLOCK",                #
-    88: "END_FINALLY",
+    88: "END_FINALLY",              #
     89: "BUILD_CLASS",
     90: "HAVE_ARGUMENT",            # Opcodes from here have an argument:
     90: "STORE_NAME",               #
