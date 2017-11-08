@@ -2,6 +2,35 @@
 
 from collections import namedtuple
 
+
+class PyTraceback(object):
+
+    def __init__(self, next, frame):
+        self.tb_next = next
+        self.tb_frame = frame
+        self.tb_lasti = frame.f_lasti
+        self.tb_lineno = self.get_line_number(frame)
+
+    def get_line_number(self, frame):
+        return self.addr2line(frame.f_code, frame.f_lasti)
+
+    def addr2line(self, code, lasti):
+        size = len(code.co_lnotab)
+        line = code.co_firstlineno
+        lnotab = code.co_lnotab
+        index = 0
+        addr = 0
+
+        while index < size:
+            addr += ord(lnotab[index])
+            if addr > lasti:
+                break
+            line += ord(lnotab[index + 1])
+            index += 2
+
+        return line
+
+
 class PyThreadState(object):
 
     """
@@ -10,8 +39,38 @@ class PyThreadState(object):
 
     def __init__(self):
         self.frame = None
+        self.curexc_type = None  # 异常类型
+        self.curexc_value = None  # 异常值
+        self.curexc_traceback = None  # 异常回溯
+
+    def fetch_error(self):
+        curexc_type = self.curexc_type
+        curexc_value = self.curexc_value
+        curexc_traceback = self.curexc_traceback
+
+        self.curexc_type = None
+        self.curexc_value = None
+        self.curexc_traceback = None
+
+        return curexc_type, curexc_value, curexc_traceback
+
+    def store_error(self, curexc_type, curexc_value, curexc_traceback=None):
+        self.curexc_type = curexc_type
+        self.curexc_value = curexc_value
+
+
+class PyFunction(object):
+
+    def __init__(self, code, globals):
+        self.func_code = code
+        self.func_globals = globals
+        self.func_name = code.co_name
+        self.func_defaults = None
+        self.func_closure = None
+
 
 PyBlock = namedtuple("PyBlock", "b_type, b_handler, b_level")
+
 
 class PyFrame(object):
     """
@@ -29,22 +88,24 @@ class PyFrame(object):
     def __init__(self, thread_state, f_code, f_globals, f_locals):
         self.f_back = thread_state.frame  # 之前的运行栈
 
-        self.f_code = f_code                # 运行代码
+        self.f_code = f_code              # 运行代码
 
         self.f_locals = f_locals          # 局部命名空间
         self.f_globals = f_globals        # 全局命名空间
         self.f_builtins = None            # 内建命名空间
 
         if self.f_back == None:
+
             self.f_builtins = __builtins__
         else:
             self.f_builtins = self.f_back.f_builtins
 
         self.f_stack = []
         self.f_lasti = -1
-        
-        self.block_stack = [] #代码块
-             
+
+        self.block_stack = []  # 代码块
+
+
 class PyCodeInfo(object):
 
     def __init__(self):
@@ -67,4 +128,3 @@ class PyCodeInfo(object):
             "*************************\n".format(**self.__dict__)
 
     __repr__ = __str__
-

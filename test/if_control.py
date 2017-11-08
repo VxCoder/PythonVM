@@ -1,11 +1,17 @@
 a = 11
 if a > 10:
     print "**************a>10"
-elif a <= -2:
-    print "a <= -2"
-elif a != 1:
+
+if a <= 20:
+    print "a <= 20"
+
+if a != 1:
     print "a != 1"
-elif a == 1:
-    print "a == 1"
+
+if a == 11:
+    print "a == 11"
+
+if a == 12:
+	print "a == 12"
 else:
     print "unknow a"

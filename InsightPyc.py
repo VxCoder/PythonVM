@@ -20,7 +20,6 @@ from PyObject import PyCodeInfo
 from PyVM import PythonVM
 
 
-
 MAGIC2VERSION = {
     20121: 'Python 1.5/1.5.1/1.5.2',
     50428: 'Python 1.6',
@@ -206,8 +205,9 @@ class PycShowApplication(Frame):
 
     def __init__(self, master=None):
         Frame.__init__(self, master)
- 
+
         self.parent = None
+        self.py_path = None
         self.pack()
         self.create_widgets()
 
@@ -267,9 +267,14 @@ class PycShowApplication(Frame):
                     outstr = "{}\t{}\t\t{}".format(last, opname, index)
                 else:
                     outstr = "{}\t{}\t\t\t{}".format(last, opname, index)
-                    
+
                 if 'arg' in locals():
-                    outstr += "\t({})".format(arg)
+                    if isinstance(arg, PyCodeInfo):
+                        outstr += "\t(Code object)".format(arg)
+                    elif isinstance(arg, str):
+                        outstr += "\t('{}')".format(arg)
+                    else:
+                        outstr += "\t({})".format(arg)
                     del arg
 
                 last += 3
@@ -326,10 +331,10 @@ class PycShowApplication(Frame):
         else:
             parent = show_tree.insert(parent_id, 0, text=pycode_object.co_name, open=False)
 
-        tmp_id = self.insert_params(parent, "co_argcount", "入参个数,不包括*args")
+        tmp_id = self.insert_params(parent, "co_argcount", "位置参数和键参数的个数(不包括*args, **kwargs)")
         show_tree.insert(tmp_id, END, text="value\t\t{}".format(pycode_object.co_argcount))
 
-        tmp_id = self.insert_params(parent, "co_nlocals", "所有局部变量的个数,包括入参")
+        tmp_id = self.insert_params(parent, "co_nlocals", "所有局部变量的个数,包括所有入参(*args, **kwargs各算一个参数)")
         show_tree.insert(tmp_id, END, text="value\t\t{}".format(pycode_object.co_nlocals))
 
         tmp_id = self.insert_params(parent, "co_stacksize", "需要的栈空间大小")
@@ -348,7 +353,9 @@ class PycShowApplication(Frame):
         for const_item in pycode_object.co_consts:
             if isinstance(const_item, PyCodeInfo):
                 self.show_pyc_code(const_item, tmp_id, py_path)
-            elif isinstance(const_item, (str, int, tuple, long)):
+            elif isinstance(const_item, str):
+                show_tree.insert(tmp_id, END, text="'{}'".format(const_item))
+            elif isinstance(const_item, (int, tuple, long)):
                 show_tree.insert(tmp_id, END, text=str(const_item))
             elif type(const_item) == bytes:
                 show_tree.insert(tmp_id, END, text=const_item)
@@ -380,18 +387,17 @@ class PycShowApplication(Frame):
             self.dis_code(pycode_object, show_tree, tmp_id)
 
         self.show_tree.insert(parent, END, text="")  # 留白
-        
-    
 
-    def generate_pyc(self, py_path):
+    @classmethod
+    def generate_pyc(cls, py_path):
         pyc_name = None
- 
+
         try:
             # 将源码编译成pycode对象
             with open(py_path) as source_fp:
                 source = source_fp.read()
                 code = compile(source, py_path, 'exec')
-                
+
             # 将pycode对象保存为pyc格式
             pyc_name = os.path.splitext(py_path)[0] + '.pyc'
             with open(pyc_name, "wb") as code_fp:
@@ -402,16 +408,16 @@ class PycShowApplication(Frame):
                 code_fp.flush()
                 code_fp.seek(4, 0)
                 py_compile.wr_long(code_fp, int(time.time()))
-                
+
         except IOError as error:
             showerror("生成PYC失败", "文件处理失败!{}".format(error))
         except Exception as error:
             showerror("生成PYC失败", "{}".format(error))
-            
+
         return pyc_name
 
     def show_pyc(self, pyc_path, py_path=None):
-       
+
         self.pycode_object = PycParser(pyc_path).insign()
         if self.parent:
             self.show_tree.delete(self.parent)
@@ -423,16 +429,19 @@ class PycShowApplication(Frame):
         py_path = filedialog.askopenfilename()
         if not py_path:
             return
+
         py_path = py_path.encode()
-        pyc_path  = self.generate_pyc(py_path)       
-        if pyc_path :
+        pyc_path = self.generate_pyc(py_path)
+        if pyc_path:
+            self.py_path = py_path
             self.show_pyc(pyc_path, py_path)
 
     def open_pyc(self):
         pyc_path = filedialog.askopenfilename()
         if not pyc_path:
             return
-  
+
+        self.py_path = None
         pyc_path = pyc_path.encode()
         self.show_pyc(pyc_path)
 
@@ -451,7 +460,7 @@ class PycShowApplication(Frame):
             self.out_vbar = Scrollbar(out_frame)
             self.out_vbar.pack(side=RIGHT, fill=Y)
 
-            self.out_stream = Text(out_frame, height = 6, background=self.background, font=self.font, foreground=self.main_color)
+            self.out_stream = Text(out_frame, height=6, background=self.background, font=self.font, foreground=self.main_color)
             self.out_stream.pack(side=LEFT,  fill=X, expand=True)
 
             self.out_stream['yscrollcommand'] = self.out_vbar.set
@@ -459,7 +468,7 @@ class PycShowApplication(Frame):
 
             out_frame.pack(fill=X)
 
-        PythonVM(self.pycode_object, self.outstream).run_code()
+        PythonVM(self.pycode_object, self.outstream, self.py_path).run_code()
 
 
 def main():

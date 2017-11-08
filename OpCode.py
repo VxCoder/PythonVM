@@ -97,7 +97,7 @@ op_code = {
     113: "JUMP_ABSOLUTE",           #
     114: "POP_JUMP_IF_FALSE",       #
     115: "POP_JUMP_IF_TRUE",        #
-    116: "LOAD_GLOBAL",
+    116: "LOAD_GLOBAL",             #
     119: "CONTINUE_LOOP",
     120: "SETUP_LOOP",              #
     121: "SETUP_EXCEPT",
