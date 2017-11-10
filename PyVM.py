@@ -4,7 +4,7 @@ import operator
 import traceback
 
 import OpCode
-from PyObject import PyThreadState, PyFunction, PyFrame, PyBlock, PyTraceback
+from PyObject import PyThreadState, PyFunctionObject, PyFrameObject, PyBlock, PyTraceback, PyCodeObject
 
 
 class PythonVM(object):
@@ -37,10 +37,10 @@ class PythonVM(object):
 
         globals = globals or {}  # 最外层的Frame,globals == locals
 
-        frame = PyFrame(thread_state=self.get_thread_state(),
-                        f_code=self.pycode_object,
-                        f_globals=globals,
-                        f_locals=globals)
+        frame = PyFrameObject(thread_state=self.get_thread_state(),
+                              f_code=self.pycode_object,
+                              f_globals=globals,
+                              f_locals=globals)
 
         why = self.eval_frame(frame, 0)
 
@@ -75,6 +75,9 @@ class PythonVM(object):
 
     def store_error(self, error_type, error_value):
         self.get_thread_state().store_error(error_type, error_value)
+
+    def error_occurred(self):
+        return self.get_thread_state().curexc_type
 
     def trace_back_here(self, frame):
         tstate = self.get_thread_state()
@@ -139,7 +142,10 @@ class PythonVM(object):
             why = self.dispatch(opname, arg)
 
             if why == self.WHY_NOT:
-                continue
+                if not self.error_occurred():
+                    continue
+
+                why = self.WHY_EXCEPTION
 
             if why == self.WHY_EXCEPTION:
                 # 保存异常Frame,展开异常堆栈用
@@ -205,6 +211,12 @@ class PythonVM(object):
         else:
             return []
 
+    def get_local(self, index):
+        return self.frame.f_fast_local[index]
+
+    def set_local(self, index, value):
+        self.frame.f_fast_local[index] = value
+
     def jumpto(self, dest):
         self.frame.f_lasti = dest
 
@@ -218,24 +230,122 @@ class PythonVM(object):
         block = PyBlock(b_type, b_handler, b_level)
         frame.block_stack.append(block)
 
+    def eval_code(self, code, globals, locals,
+                  args, argcount, kws, kwcount,
+                  defs, defcount, closure):
+        frame = PyFrameObject(self.get_thread_state(), code, globals, locals)
+
+        while True:
+
+            if (code.co_argcount > 0) or (code.co_flags & (PyCodeObject.CO_VARARGS | PyCodeObject.CO_VARKEYWORDS)):
+                n = argcount
+                kwd_dict = None
+                # 设置扩展键参数为局部变量
+                if code.co_flags & PyCodeObject.CO_VARKEYWORDS:
+                    kwd_dict = {}
+                    kwd_pos = code.co_argcount
+                    if code.co_flags & PyCodeObject.CO_VARARGS:
+                        kwd_pos += 1
+                    frame.f_fast_local[kwd_pos] = kwd_dict
+
+                # 检测参数是否过多
+                if argcount > code.co_argcount:
+                    if not (code.co_flags & PyCodeObject.CO_VARARGS):
+                        self.store_error(TypeError,
+                                         "{} takes {} {} "
+                                         "argument{} ({} given)".format(
+                                             code.co_name,
+                                             "at most" if defcount else 'exactly',
+                                             code.co_argcount,
+                                             "" if code.co_argcount == 1 else 's',
+                                             argcount + kwcount))
+                        break
+                    n = code.co_argcount
+
+                frame.f_fast_local[:n] = args[:n]
+                # 设置扩展参数为局部变量
+                if code.co_flags & PyCodeObject.CO_VARARGS:
+                    u = tuple(args[n: argcount])
+                    frame.f_fast_local[code.co_argcount] = u
+
+                indexs = []
+                #---------------------- 键参数处理-----------------------#
+                for i in range(kwcount):
+                    keyword = kws[2 * i]
+                    value = kws[2 * i + 1]
+
+                    # 获取键参数在局部变量列表里的索引
+                    index = None
+                    try:
+                        index = code.co_varnames.index(keyword)
+                    except ValueError:
+                        if kwd_dict == None:
+                            self.store_error(TypeError,
+                                             "{} got an unexpected "
+                                             "keyword argument '{}'".format(code.co_name, keyword))
+                            break
+                        else:
+                            kwd_dict[keyword] = value
+
+                    if index:
+                        # 判断键参数是否有重复
+                        if index in indexs:
+                            self.store_error(TypeError,
+                                             "{} got multiple "
+                                             "values for keyword "
+                                             "argument '{}".format(code.co_name, keyword))
+                            break
+                        indexs.append(index)
+
+                        frame.f_fast_local[index] = value
+
+                #------------------ 传入参数小于声明的参数,需要使用默认参数-------------#
+                if argcount < code.co_argcount:
+                    # 位置参数 = 参数总数 - 被设置了默认值的位置参数(键参数)
+                    pos_args = code.co_argcount - defcount
+                    if argcount < pos_args:  # 声明的位置参数 大于传入的位置参数
+                        self.store_error(TypeError, "param not enough")
+                        break
+
+                    replace = 0
+                    # 传入的位置参数大于声明的位置参数 , 说明要替换部分的默认参数
+                    if argcount > pos_args:
+                        replace = argcount - pos_args
+
+                    for x in range(replace, defcount):
+                        if pos_args + x not in indexs:  # 之前键参数以修改过默认参数的跳过
+                            frame.f_fast_local[pos_args + x] = defs[x]
+
+            return self.eval_frame(frame, 0)
+
     def fast_function(self, func, stack, n, na, nk):
         co = func.func_code
         globals = func.func_globals
         argdefs = func.func_defaults
 
         if argdefs == None and co.co_argcount == n and nk == 0:
-            frame = PyFrame(self.get_thread_state(), co, globals, None)
-            retval = self.eval_frame(frame, 0)
-            return retval
+            frame = PyFrameObject(self.get_thread_state(), co, globals, None)
+            frame.f_fast_local[:] = stack[-n:]  # 将父堆栈的参数拷贝到子堆栈的位置参数中
+            return self.eval_frame(frame, 0)
+        else:
+            return self.eval_code(co,           # code object
+                                  globals,      # globals
+                                  None,         # locals
+                                  stack[-n:], na,   # args & argcount
+                                  stack[-2 * nk:], nk,  # kws & ckcount
+                                  argdefs, len(argdefs),  # defs & defcount
+                                  func.func_closure)  # clousure
 
     def call_function(self, stack, oparg):
-        na = oparg & 0xff
-        nk = (oparg >> 8) & 0xff
+        nk, na = divmod(oparg, 256)
         n = na + 2 * nk
 
         func = stack[-n - 1]
 
         x = self.fast_function(func, stack, n, na, nk)
+
+        # 弹出子函数参数和子函数，堆栈恢复
+        stack = stack[:-n - 1]
         return x
 
     def pop_block(self, frame):
@@ -489,6 +599,14 @@ class PythonVM(object):
         name = self.get_name(args)
         self.push(self.frame.f_globals[name])
 
+    def LOAD_FAST(self, index):
+        value = self.get_local(index)
+        self.push(value)
+
+    def STORE_FAST(self, index):
+        value = self.pop()
+        self.set_local(index, value)
+
     def BUILD_MAP(self, _):
         self.detail_print("BUILD_MAP")
         self.push({})
@@ -505,10 +623,10 @@ class PythonVM(object):
         self.detail_print("MAKE_FUNCTION")
 
         code = self.pop()
-        func = PyFunction(code, self.frame.f_globals)
+        func = PyFunctionObject(code, self.frame.f_globals)
 
         if func and oparg > 0:
-            pass
+            func.func_defaults = self.popn(oparg)
 
         self.push(func)
 
@@ -520,7 +638,6 @@ class PythonVM(object):
         self.frame = self.get_thread_state().frame
 
         self.push(x)
-        return x
 
     def PRINT_ITEM(self):
         value = self.pop()

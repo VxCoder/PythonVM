@@ -16,7 +16,7 @@ from ttk import *
 
 
 import OpCode
-from PyObject import PyCodeInfo
+from PyObject import PyCodeObject
 from PyVM import PythonVM
 
 
@@ -118,7 +118,7 @@ class PycParser(object):
         return list_data
 
     def read_CODE_type(self):
-        pycode_object = PyCodeInfo()
+        pycode_object = PyCodeObject()
         pycode_object.co_argcount = self.read_long()
         pycode_object.co_nlocals = self.read_long()
         pycode_object.co_stacksize = self.read_long()
@@ -211,9 +211,9 @@ class PycShowApplication(Frame):
         self.pack()
         self.create_widgets()
 
-#         py_path = "D:/Git/PythonVM/test/exception_control.py"
-#         pyc_path = self.generate_pyc(py_path)
-#         self.show_pyc(pyc_path, py_path)
+        py_path = "D:/Git/PythonVM/test/func_4.py"
+        pyc_path = self.generate_pyc(py_path)
+        self.show_pyc(pyc_path, py_path)
 
     def set_style(self):
         self.background = "#272822"
@@ -269,7 +269,7 @@ class PycShowApplication(Frame):
                     outstr = "{}\t{}\t\t\t{}".format(last, opname, index)
 
                 if 'arg' in locals():
-                    if isinstance(arg, PyCodeInfo):
+                    if isinstance(arg, PyCodeObject):
                         outstr += "\t(Code object)".format(arg)
                     elif isinstance(arg, str):
                         outstr += "\t('{}')".format(arg)
@@ -351,7 +351,7 @@ class PycShowApplication(Frame):
 
         tmp_id = self.insert_params(parent, "co_consts", "所有常量数据(所包含的代码块数据也在其中)")
         for const_item in pycode_object.co_consts:
-            if isinstance(const_item, PyCodeInfo):
+            if isinstance(const_item, PyCodeObject):
                 self.show_pyc_code(const_item, tmp_id, py_path)
             elif isinstance(const_item, str):
                 show_tree.insert(tmp_id, END, text="'{}'".format(const_item))

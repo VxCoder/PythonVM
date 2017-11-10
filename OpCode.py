@@ -102,12 +102,12 @@ op_code = {
     120: "SETUP_LOOP",              #
     121: "SETUP_EXCEPT",
     122: "SETUP_FINALLY",
-    124: "LOAD_FAST",
-    125: "STORE_FAST",
+    124: "LOAD_FAST",               #
+    125: "STORE_FAST",              #
     126: "DELETE_FAST",
-    130: "RAISE_VARARGS",
-    131: "CALL_FUNCTION",
-    132: "MAKE_FUNCTION",
+    130: "RAISE_VARARGS",           #
+    131: "CALL_FUNCTION",           #
+    132: "MAKE_FUNCTION",           #
     133: "BUILD_SLICE",
     134: "MAKE_CLOSURE",
     135: "LOAD_CLOSURE",

@@ -59,20 +59,20 @@ class PyThreadState(object):
         self.curexc_value = curexc_value
 
 
-class PyFunction(object):
+class PyFunctionObject(object):
 
     def __init__(self, code, globals):
-        self.func_code = code
-        self.func_globals = globals
-        self.func_name = code.co_name
-        self.func_defaults = None
+        self.func_code = code  # 运行代码
+        self.func_globals = globals  # 全局变量
+        self.func_name = code.co_name  # 函数名
+        self.func_defaults = []  # 默认参数
         self.func_closure = None
 
 
 PyBlock = namedtuple("PyBlock", "b_type, b_handler, b_level")
 
 
-class PyFrame(object):
+class PyFrameObject(object):
     """
     python 运行栈对象
     f_back:          前一个运行栈
@@ -103,28 +103,37 @@ class PyFrame(object):
         self.f_stack = []
         self.f_lasti = -1
 
+        # 静态局部变量保存地方
+        # CO_OPTIMIZED | CO_NEWLOCALS 生效时，LOAD|STORE_FAST 使用
+        self.f_fast_local = [None for _ in range(f_code.co_nlocals)]
+
         self.block_stack = []  # 代码块
 
 
-class PyCodeInfo(object):
+class PyCodeObject(object):
+
+    CO_OPTIMIZED = 0x0001
+    CO_NEWLOCALS = 0x0002
+    CO_VARARGS = 0x0004  # 扩展位置参数
+    CO_VARKEYWORDS = 0x0008  # 扩展键参数
+    CO_NESTED = 0x0010
+    CO_GENERATOR = 0x0020  # 生成器
+    CO_NOFREE = 0x0040  # 没有闭包
 
     def __init__(self):
-        self.__dict__ = {key: None for key in ('co_argcount', 'co_nlocals', 'co_stacksize',
-                                               'co_flags', 'co_code', 'co_consts', 'co_names',
-                                               'co_varnames', 'co_freevars', 'co_cellvars',
-                                               'co_filename', 'co_name', 'co_firstlineno', 'co_lnotab',
-                                               'version', 'mtime')}
-
-    def __str__(self):
-        return "\n*************************\n"\
-            "CodeOjbect:{co_name}\n"\
-            "co_argcount:{co_argcount}\n"\
-            "co_nlocals:{co_nlocals}\n"\
-            "co_stacksize:{co_stacksize}\n"\
-            "co_flags:{co_flags}\n"\
-            "co_names:{co_names}\n"\
-            "co_consts:{co_consts}\n"\
-            "co_filename:{co_filename}\n"\
-            "*************************\n".format(**self.__dict__)
-
-    __repr__ = __str__
+        self.co_co_argcount = None
+        self.co_nlocals = None
+        self.co_stacksize = None
+        self.co_flags = None
+        self.co_code = None
+        self.co_consts = None
+        self.co_names = None
+        self.co_varnames = None
+        self.co_freevars = None
+        self.co_cellvars = None
+        self.co_filename = None
+        self.co_name = None
+        self.co_firstlineno = None
+        self.co_lnotab = None
+        self.version = None
+        self.mtime = None
