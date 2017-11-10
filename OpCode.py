@@ -1,6 +1,6 @@
 
 op_code = {
-    0: "STOP_CODE",
+    0: "STOP_CODE",                 # this is an error
     1: "POP_TOP",                   #
     2: "ROT_TWO",                   #
     3: "ROT_THREE",                 #
@@ -23,18 +23,18 @@ op_code = {
     27: "BINARY_TRUE_DIVIDE",       #
     28: "INPLACE_FLOOR_DIVIDE",     #
     29: "INPLACE_TRUE_DIVIDE",      #
-    30: "SLICE",
-    31: "SLICE_1",
-    32: "SLICE_2",
-    33: "SLICE_3",
-    40: "STORE_SLICE",
-    41: "STORE_SLICE_1",
-    42: "STORE_SLICE_2",
-    43: "STORE_SLICE_3",
-    50: "DELETE_SLICE",
-    51: "DELETE_SLICE_1",
-    52: "DELETE_SLICE_2",
-    53: "DELETE_SLICE_3",
+    30: "SLICE",                    #
+    31: "SLICE_1",                  #
+    32: "SLICE_2",                  #
+    33: "SLICE_3",                  #
+    40: "STORE_SLICE",              #
+    41: "STORE_SLICE_1",            #
+    42: "STORE_SLICE_2",            #
+    43: "STORE_SLICE_3",            #
+    50: "DELETE_SLICE",             #
+    51: "DELETE_SLICE_1",           #
+    52: "DELETE_SLICE_2",           #
+    53: "DELETE_SLICE_3",           #
     54: "STORE_MAP",
     55: "INPLACE_ADD",              #
     56: "INPLACE_SUBTRACT",         #
@@ -85,7 +85,7 @@ op_code = {
     101: "LOAD_NAME",               #
     102: "BUILD_TUPLE",             #
     103: "BUILD_LIST",              #
-    104: "BUILD_SET",
+    104: "BUILD_SET",               #
     105: "BUILD_MAP",               #
     106: "LOAD_ATTR",
     107: "COMPARE_OP",              #
@@ -108,11 +108,11 @@ op_code = {
     130: "RAISE_VARARGS",           #
     131: "CALL_FUNCTION",           #
     132: "MAKE_FUNCTION",           #
-    133: "BUILD_SLICE",
-    134: "MAKE_CLOSURE",
-    135: "LOAD_CLOSURE",
-    136: "LOAD_DEREF",
-    137: "STORE_DEREF",
+    133: "BUILD_SLICE",             #
+    134: "MAKE_CLOSURE",            #
+    135: "LOAD_CLOSURE",            #
+    136: "LOAD_DEREF",              #
+    137: "STORE_DEREF",             #
     140: "CALL_FUNCTION_VAR",
     141: "CALL_FUNCTION_KW",
     142: "CALL_FUNCTION_VAR_KW",

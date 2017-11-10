@@ -68,8 +68,24 @@ class PyFunctionObject(object):
         self.func_defaults = []  # 默认参数
         self.func_closure = None
 
+    def set_closure(self, cells):
+        self.func_closure = cells
+
 
 PyBlock = namedtuple("PyBlock", "b_type, b_handler, b_level")
+
+
+class PyCellObject(object):
+
+    def __init__(self, *args):
+        if len(args):
+            self.ob_ref = args[0]
+
+    def set(self, obj):
+        self.ob_ref = obj
+
+    def get(self):
+        return self.ob_ref  # 获取前,应该已经设置过了
 
 
 class PyFrameObject(object):
@@ -105,18 +121,19 @@ class PyFrameObject(object):
 
         # 静态局部变量保存地方
         # CO_OPTIMIZED | CO_NEWLOCALS 生效时，LOAD|STORE_FAST 使用
-        self.f_fast_local = [None for _ in range(f_code.co_nlocals)]
+        extras = f_code.co_nlocals + len(f_code.co_cellvars) + len(f_code.co_freevars)
+        self.f_fast_local = [None for _ in range(extras)]
 
         self.block_stack = []  # 代码块
 
 
 class PyCodeObject(object):
 
-    CO_OPTIMIZED = 0x0001
-    CO_NEWLOCALS = 0x0002
+    CO_OPTIMIZED = 0x0001   # 局部变量快速读取
+    CO_NEWLOCALS = 0x0002   # 局部变量快速读取
     CO_VARARGS = 0x0004  # 扩展位置参数
     CO_VARKEYWORDS = 0x0008  # 扩展键参数
-    CO_NESTED = 0x0010
+    CO_NESTED = 0x0010  # 闭包函数标志
     CO_GENERATOR = 0x0020  # 生成器
     CO_NOFREE = 0x0040  # 没有闭包
 

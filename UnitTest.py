@@ -4,7 +4,7 @@ import re
 import os
 import subprocess
 
-from PyVM import PythonVM
+from PyVM2 import PythonVM
 from InsightPyc import PycParser, PycShowApplication
 
 space = re.compile(r'\s')

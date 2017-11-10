@@ -9,15 +9,15 @@ import tkFont
 import py_compile
 
 import tkinter.filedialog as filedialog
-from tkinter.scrolledtext import ScrolledText
 from Tkinter import *
 from tkMessageBox import *
 from ttk import *
 
 
 import OpCode
+from PyVM2 import PythonVM
+from PyEditor import PyEditor
 from PyObject import PyCodeObject
-from PyVM import PythonVM
 
 
 MAGIC2VERSION = {
@@ -211,9 +211,9 @@ class PycShowApplication(Frame):
         self.pack()
         self.create_widgets()
 
-        py_path = "D:/Git/PythonVM/test/func_4.py"
-        pyc_path = self.generate_pyc(py_path)
-        self.show_pyc(pyc_path, py_path)
+#         py_path = "D:/Git/PythonVM/test/other.py"
+#         pyc_path = self.generate_pyc(py_path)
+#         self.show_pyc(pyc_path, py_path)
 
     def set_style(self):
         self.background = "#272822"
@@ -244,6 +244,8 @@ class PycShowApplication(Frame):
         Button(bottom, text="打开PYC文件", command=self.open_pyc).pack(side=LEFT, expand=True)
         self.run_button = Button(bottom, text="运行代码", state="disable", command=self.run_code)
         self.run_button.pack(side=LEFT, expand=True)
+        self.edit_button = Button(bottom, text="编辑PY文件", state="disable", command=self.edit_file)
+        self.edit_button.pack(side=LEFT, expand=True)
         bottom.pack(fill=X)
 
     def insert_params(self, parent, text, note, tab=2, open=False):
@@ -423,6 +425,7 @@ class PycShowApplication(Frame):
             self.show_tree.delete(self.parent)
             self.parent = None
         self.run_button.config(state='normal')
+
         self.show_pyc_code(self.pycode_object, py_path=py_path)
 
     def open_py(self):
@@ -435,6 +438,7 @@ class PycShowApplication(Frame):
         if pyc_path:
             self.py_path = py_path
             self.show_pyc(pyc_path, py_path)
+            self.edit_button.config(state='normal')
 
     def open_pyc(self):
         pyc_path = filedialog.askopenfilename()
@@ -444,6 +448,7 @@ class PycShowApplication(Frame):
         self.py_path = None
         pyc_path = pyc_path.encode()
         self.show_pyc(pyc_path)
+        self.edit_button.config(state='disable')
 
     def outstream(self, message, newline=True):
         message = str(message)
@@ -470,11 +475,15 @@ class PycShowApplication(Frame):
 
         PythonVM(self.pycode_object, self.outstream, self.py_path).run_code()
 
+    def edit_file(self):
+        pass
+        # PyEditor.run()
+
 
 def main():
     root = Tk()
     root.title("Pyc Insight")
-    root.geometry('800x400')
+    root.geometry('800x400+100+100')
     root.resizable(width=True, height=True)
     app = PycShowApplication(master=root)
     app.mainloop()

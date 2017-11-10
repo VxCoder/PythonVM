@@ -4,7 +4,7 @@ import operator
 import traceback
 
 import OpCode
-from PyObject import PyThreadState, PyFunctionObject, PyFrameObject, PyBlock, PyTraceback, PyCodeObject
+from PyObject import PyThreadState, PyFunctionObject, PyFrameObject, PyBlock, PyCellObject, PyTraceback, PyCodeObject
 
 
 class PythonVM(object):
@@ -23,6 +23,8 @@ class PythonVM(object):
     TYPE_SETUP_LOOP = 'loop'
     TYPE_SETUP_FINALLY = 'finally'
     TYPE_SETUP_EXCEPT = 'except'
+
+    SHOW_DETAIL = False
 
     def __init__(self, pycode_object, outstream, source_file=None):
         self.pycode_object = pycode_object
@@ -113,6 +115,8 @@ class PythonVM(object):
                 self.binaryOperator(opname[7:])
             elif opname.startswith('INPLACE_'):
                 self.inplaceOperator(opname[8:])
+            elif 'SLICE' in opname and opname != 'BUILD_SLICE':
+                self.sliceOperator(opname)
             else:
                 op_func = getattr(self, opname, None)
 
@@ -211,10 +215,14 @@ class PythonVM(object):
         else:
             return []
 
-    def get_local(self, index):
+    def get_fast_local(self, index):
         return self.frame.f_fast_local[index]
 
-    def set_local(self, index, value):
+    def get_freevars(self, index):
+        index = self.frame.f_code.co_nlocals + index
+        return self.frame.f_fast_local[index]
+
+    def set_fast_local(self, index, value):
         self.frame.f_fast_local[index] = value
 
     def jumpto(self, dest):
@@ -316,6 +324,30 @@ class PythonVM(object):
                         if pos_args + x not in indexs:  # 之前键参数以修改过默认参数的跳过
                             frame.f_fast_local[pos_args + x] = defs[x]
 
+            # 设置内层约束变量
+            if len(code.co_cellvars):
+                nargs = code.co_argcount
+                if code.co_flags & PyCodeObject.CO_VARARGS:
+                    nargs += 1
+                if code.co_flags & PyCodeObject.CO_VARKEYWORDS:
+                    nargs += 1
+
+                for index, cellname in enumerate(code.co_cellvars):
+                    found = 0
+                    if cellname in code.co_varnames:
+                        i = code.co_varnames.index(cellname)
+                        cell = PyCellObject(frame.f_fast_local[i])
+                    else:
+                        cell = PyCellObject()
+
+                    frame.f_fast_local[code.co_nlocals + index] = cell
+
+            # 设置自由变量
+            if len(code.co_freevars):
+                for index, cell in enumerate(closure):
+                    i = frame.f_code.co_nlocals + len(code.co_cellvars) + index
+                    frame.f_fast_local[i] = cell
+
             return self.eval_frame(frame, 0)
 
     def fast_function(self, func, stack, n, na, nk):
@@ -323,7 +355,10 @@ class PythonVM(object):
         globals = func.func_globals
         argdefs = func.func_defaults
 
-        if argdefs == None and co.co_argcount == n and nk == 0:
+        if ((argdefs == None)
+                and (co.co_argcount == n)
+                and (nk == 0)
+                and (co.co_flags == (PyCodeObject.CO_OPTIMIZED | PyCodeObject.CO_NEWLOCALS | PyCodeObject.CO_NOFREE))):
             frame = PyFrameObject(self.get_thread_state(), co, globals, None)
             frame.f_fast_local[:] = stack[-n:]  # 将父堆栈的参数拷贝到子堆栈的位置参数中
             return self.eval_frame(frame, 0)
@@ -352,8 +387,8 @@ class PythonVM(object):
         return frame.block_stack.pop()
 
     def detail_print(self, name, *args):
-        return
-        print name
+        if self.SHOW_DETAIL:
+            print name
 
     UNARY_OPERATORS = {
         'POSITIVE': operator.pos,  # +a
@@ -414,6 +449,32 @@ class PythonVM(object):
         self.set_top(self.COMPARE_OPERATORS[opnum](x, y))
 
         # cpython 会预测下条跳转指令, 这里不做类似优化了
+
+    def sliceOperator(self, opname):
+        start = 0
+        end = None
+
+        count = ord(opname[-1]) - ord('0')
+
+        if count == 1:
+            start = self.pop()
+        elif count == 2:
+            end = self.pop()
+        elif count == 3:
+            end = self.pop()
+            start = self.pop()
+
+        l = self.pop()
+        if end is None:
+            end = len(l)
+        if opname.startswith('STORE_'):
+            l[start:end] = self.pop()
+
+        elif opname.startswith('DELETE_'):
+            del l[start:end]
+
+        else:
+            self.push(l[start:end])
 
     def POP_JUMP_IF_FALSE(self, addr):
         self.detail_print("POP_JUMP_IF_FALSE")
@@ -574,11 +635,22 @@ class PythonVM(object):
         map[key] = val
         self.push(map)
 
+    def STORE_DEREF(self, index):
+        self.detail_print("STORE_DEREF")
+        value = self.pop()
+        cell = self.get_freevars(index)
+        cell.set(value)
+
     def STORE_SUBSCR(self):
         self.detail_print("STORE_SUBSCR")
 
         val, map, subscr = self.popn(3)
         map[subscr] = val
+
+    def LOAD_DEREF(self, index):
+        cell = self.get_freevars(index)
+        obj = cell.get()
+        self.push(obj)
 
     def LOAD_NAME(self, index):
         self.detail_print("LOAD_NAME")
@@ -592,32 +664,69 @@ class PythonVM(object):
         elif name in frame.f_builtins:
             value = frame.f_builtins[name]
         else:
-            raise NameError("name '%s' is not defined".foramt(name))
+            raise NameError("name '{}' is not defined".format(name))
         self.push(value)
 
     def LOAD_GLOBAL(self, args):
+        self.detail_print("LOAD_GLOBAL")
+
         name = self.get_name(args)
         self.push(self.frame.f_globals[name])
 
     def LOAD_FAST(self, index):
-        value = self.get_local(index)
+        self.detail_print("LOAD_FAST")
+
+        value = self.get_fast_local(index)
         self.push(value)
 
+    def LOAD_CLOSURE(self, index):
+        self.detail_print("LOAD_CLOSURE")
+
+        cell = self.get_freevars(index)
+        self.push(cell)
+
+    def MAKE_CLOSURE(self, arg_num):
+        self.detail_print("MAKE_CLOSURE")
+
+        co = self.pop()
+        func = PyFunctionObject(co, self.frame.f_globals)
+
+        cells = self.pop()
+        func.set_closure(cells)
+
+        if arg_num > 0:
+            func.func_defaults = self.popn(arg_num)
+
+        self.push(func)
+
     def STORE_FAST(self, index):
+        self.detail_print("STORE_FAST")
+
         value = self.pop()
-        self.set_local(index, value)
+        self.set_fast_local(index, value)
 
     def BUILD_MAP(self, _):
         self.detail_print("BUILD_MAP")
+
         self.push({})
 
     def BUILD_TUPLE(self, num):
+        self.detail_print("BUILD_TUPLE")
+
         value = self.popn(num)
         self.push(tuple(value))
 
     def BUILD_LIST(self, num):
+        self.detail_print("BUILD_LIST")
+
         value = self.popn(num)
         self.push(value)
+
+    def BUILD_SET(self, num):
+        self.detail_print("BUILD_SET")
+
+        values = self.popn(num)
+        self.push(set(values))
 
     def MAKE_FUNCTION(self, oparg):
         self.detail_print("MAKE_FUNCTION")
@@ -637,7 +746,18 @@ class PythonVM(object):
         x = self.call_function(sp, oparg)
         self.frame = self.get_thread_state().frame
 
-        self.push(x)
+        if x == self.WHY_RETURN:
+            self.push(self.ret_value)
+        else:
+            self.push(x)
+
+    def BUILD_SLICE(self, oparg):
+        step = None
+        if oparg == 3:
+            step = self.pop()
+        end = self.pop()
+        start = self.top()
+        self.set_top(slice(start, end, step))
 
     def PRINT_ITEM(self):
         value = self.pop()
