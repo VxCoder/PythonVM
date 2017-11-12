@@ -211,9 +211,9 @@ class PycShowApplication(Frame):
         self.pack()
         self.create_widgets()
 
-#         py_path = "D:/Git/PythonVM/test/other.py"
-#         pyc_path = self.generate_pyc(py_path)
-#         self.show_pyc(pyc_path, py_path)
+        py_path = "D:/Git/PythonVM/test/func_5.py"
+        pyc_path = self.generate_pyc(py_path)
+        self.show_pyc(pyc_path, py_path)
 
     def set_style(self):
         self.background = "#272822"

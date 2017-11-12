@@ -37,11 +37,17 @@ class PyThreadState(object):
     PyThreadState 类似于线程
     """
 
+    THREAD_STATES = []
+    CUR_THREAD_STATE = None
+
     def __init__(self):
         self.frame = None
         self.curexc_type = None  # 异常类型
         self.curexc_value = None  # 异常值
         self.curexc_traceback = None  # 异常回溯
+
+        self.THREAD_STATES.append(self)
+        self.__class__.CUR_THREAD_STATE = 0
 
     def fetch_error(self):
         curexc_type = self.curexc_type
@@ -57,6 +63,45 @@ class PyThreadState(object):
     def store_error(self, curexc_type, curexc_value, curexc_traceback=None):
         self.curexc_type = curexc_type
         self.curexc_value = curexc_value
+
+    @classmethod
+    def GET_THREAD_STATE(cls):
+        return cls.THREAD_STATES[cls.CUR_THREAD_STATE]
+
+
+class PyGenObject(object):
+
+    def __init__(self, frame):
+
+        self.gi_frame = frame
+        self.gi_running = False
+        self.gi_code = frame.f_code
+        self.gi_weakreflist = None
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        tstate = PyThreadState.GET_THREAD_STATE()
+        frame = self.gi_frame
+        result = None
+
+        if self.gi_running:
+            tstate.store_error(ValueError, "generator already executing")
+            return None
+
+        # 生成器返回到最近的调用者，而不是它的创建者
+        frame.f_tstate = tstate
+        frame.f_back = tstate.frame
+
+        self.gi_running = 1
+        #result = PyEval_EvalFrameEx(f, exc);
+        self.gi_running = 0
+
+        frame.f_back = None
+        frame.f_tstate = None
+
+        return result
 
 
 class PyFunctionObject(object):
@@ -102,6 +147,7 @@ class PyFrameObject(object):
     """
 
     def __init__(self, thread_state, f_code, f_globals, f_locals):
+        self.f_tstate = thread_state
         self.f_back = thread_state.frame  # 之前的运行栈
 
         self.f_code = f_code              # 运行代码

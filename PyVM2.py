@@ -4,10 +4,12 @@ import operator
 import traceback
 
 import OpCode
-from PyObject import PyThreadState, PyFunctionObject, PyFrameObject, PyBlock, PyCellObject, PyTraceback, PyCodeObject
+from PyObject import PyThreadState, PyFunctionObject, PyFrameObject, PyBlock, PyCellObject, PyTraceback, PyCodeObject, PyGenObject
+from _pyio import __metaclass__
 
 
 class PythonVM(object):
+
     """
     PythonVM 类似于CPU,执行code,切换运行时frame
     """
@@ -347,6 +349,11 @@ class PythonVM(object):
                 for index, cell in enumerate(closure):
                     i = frame.f_code.co_nlocals + len(code.co_cellvars) + index
                     frame.f_fast_local[i] = cell
+
+            # 生成器对象
+            if code.co_flags & PyCodeObject.CO_GENERATOR:
+                frame.f_back = None
+                return PyGenObject(frame)
 
             return self.eval_frame(frame, 0)
 
