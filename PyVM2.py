@@ -5,7 +5,15 @@ import traceback
 
 import OpCode
 from PyObject import PyThreadState, PyFunctionObject, PyFrameObject, PyBlock, PyCellObject, PyTraceback, PyCodeObject, PyGenObject
-from _pyio import __metaclass__
+
+
+class Singleton(object):
+    __instance = None
+
+    def __new__(cls, *args, **kwd):
+        if Singleton.__instance is None:
+            Singleton.__instance = object.__new__(cls, *args, **kwd)
+        return Singleton.__instance
 
 
 class PythonVM(object):
