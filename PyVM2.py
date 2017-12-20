@@ -205,6 +205,24 @@ class PythonVM(object):
     def get_name(self, index):
         return self.frame.f_code.co_names[index]
 
+    def build_class(self, methods, bases, name):
+
+        # get meta
+        if "__metaclass__" in methods:
+            metaclass = methods['__metaclass__']
+        elif len(bases) > 0:
+            metaclass = bases[0].__class__
+            if not metaclass:
+                metaclass = type(bases[0])
+        else:
+            metaclass = self.frame.f_globals.get('__metaclass__', None)
+            if not metaclass:
+                metaclass = type
+
+        klass = metaclass(name, bases, methods)
+
+        return klass
+
     def top(self):
         return self.frame.f_stack[-1]
 
@@ -688,6 +706,10 @@ class PythonVM(object):
         name = self.get_name(args)
         self.push(self.frame.f_globals[name])
 
+    def LOAD_LOCALS(self):
+        self.detail_print("LOAD_LOCALS")
+        self.push(self.frame.f_locals)
+
     def LOAD_FAST(self, index):
         self.detail_print("LOAD_FAST")
 
@@ -743,6 +765,13 @@ class PythonVM(object):
         values = self.popn(num)
         self.push(set(values))
 
+    def BUILD_CLASS(self):
+        methods = self.top()
+        bases = self.pop()
+        name = self.pop()
+        klass = self.build_class(methods, bases, name)
+        self.set_top(klass)
+
     def MAKE_FUNCTION(self, oparg):
         self.detail_print("MAKE_FUNCTION")
 
@@ -759,6 +788,7 @@ class PythonVM(object):
 
         sp = self.frame.f_stack
         x = self.call_function(sp, oparg)
+
         self.frame = self.get_thread_state().frame
 
         if x == self.WHY_RETURN:

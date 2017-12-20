@@ -48,8 +48,8 @@ def main_test():
         else:
             failed += 1
             print "failed {}".format(py_path)
-            print">>>>>>>>>>>>>>>>>real>>>>>>>>\n{}".format(real_output.strip())
-            print"<<<<<<<<<<<<<<<<vm<<<<<<<<<<<\n{}".format(vm_output.strip())
+            print ">>>>>>>>>>>>>>>>>real>>>>>>>>\n{}".format(real_output.strip())
+            print "<<<<<<<<<<<<<<<<vm<<<<<<<<<<<\n{}".format(vm_output.strip())
 
         outstring = []
 
@@ -57,5 +57,8 @@ def main_test():
     print "success: {} failed: {}".format(success, failed)
     print "**************************"
 
+    return failed
+
+
 if __name__ == "__main__":
-    main_test()
+    exit(main_test())

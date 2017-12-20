@@ -8,8 +8,16 @@ inherits = [
 O
 F O
 E O
+C E
+B F
+A B C
+""",
+    """
+O
+F O
+E O
 D O
-C F D
+C D F
 B D E
 A B C
 """,
@@ -110,7 +118,7 @@ def L(C, inherit):
     if len(inherit[C]):
         # 通过递归实现深度搜索, 从而保证单调性
         Lns = [L(base, inherit) for base in inherit[C]]
-        Lns.append(inherit[C])
+        # Lns.append(inherit[C])
 
         # 通过merge算法,实现菱形继承时,方法不能覆盖问题
         lst += merge(Lns, inherit)

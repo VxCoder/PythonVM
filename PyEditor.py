@@ -1,17 +1,8 @@
 # coding=utf-8
+
 import tkFont
 from Tkinter import *
 from ttk import *
-from PIL.ImageOps import expand
-
-
-# open_file_icon = PhotoImage(file='icons/open_file.gif')
-# save_file_icon = PhotoImage(file='icons/save.gif')
-# cut_icon = PhotoImage(file='icons/cut.gif')
-# copy_icon = PhotoImage(file='icons/copy.gif')
-# paste_icon = PhotoImage(file='icons/paste.gif')
-# undo_icon = PhotoImage(file='icons/undo.gif')
-# redo_icon = PhotoImage(file='icons/redo.gif')
 
 
 class PyEditor(Frame):
@@ -135,7 +126,7 @@ class PyEditor(Frame):
         scroll_bar.pack(side=RIGHT, fill=Y)
 
     def new_file(self):
-        print "new_file"
+        print("new_file")
 
     @classmethod
     def run(cls):
@@ -149,6 +140,7 @@ class PyEditor(Frame):
 
 def main():
     PyEditor.run()
+
 
 if __name__ == "__main__":
     main()

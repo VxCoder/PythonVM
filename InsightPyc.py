@@ -211,7 +211,7 @@ class PycShowApplication(Frame):
         self.pack()
         self.create_widgets()
 
-        py_path = "D:/Git/PythonVM/test/func_5.py"
+        py_path = "D:/Git/PythonVM/test/class_0.py"
         pyc_path = self.generate_pyc(py_path)
         self.show_pyc(pyc_path, py_path)
 
@@ -253,7 +253,7 @@ class PycShowApplication(Frame):
 
     def dis_code(self, pycode_object, show_tree, parent_id, co_code=None, last=None):
         last = last or 0
-        co_code = co_code or memoryview(pycode_object.co_code)
+        co_code = co_code if (co_code != None) else memoryview(pycode_object.co_code)
 
         while co_code:
             code = ord(co_code[0])
@@ -304,6 +304,9 @@ class PycShowApplication(Frame):
 
         while lntoab:
             code_offset = ord(lntoab[0])
+            if code_offset == 0:
+                break
+
             source_offset = ord(lntoab[1])
 
             for _ in xrange(source_offset):
@@ -314,14 +317,18 @@ class PycShowApplication(Frame):
 
             last = self.dis_code(pycode_object, show_tree, parent_id, co_code=co_code[:code_offset], last=last)
             co_code = co_code[code_offset:]
+
             lntoab = lntoab[2:]
 
         for line in source:
-            show_tree.insert(parent_id, END, text="*{}\t{}".format(lineno, line))
-            lineno += 1
-        self.dis_code(pycode_object, show_tree, parent_id, co_code=co_code, last=last)
-
+            if line.strip():
+                show_tree.insert(parent_id, END, text="*{}\t{}".format(lineno, line))
+                lineno += 1
+            else:
+                break
         source.close()
+
+        self.dis_code(pycode_object, show_tree, parent_id, co_code=co_code, last=last)
 
     def show_pyc_code(self, pycode_object, parent_id='', py_path=None):
         show_tree = self.show_tree
@@ -481,6 +488,7 @@ class PycShowApplication(Frame):
 
 
 def main():
+    print sys.modules
     root = Tk()
     root.title("Pyc Insight")
     root.geometry('800x400+100+100')
