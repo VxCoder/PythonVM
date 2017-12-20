@@ -8,7 +8,7 @@ import struct
 import tkFont
 import py_compile
 
-import tkinter.filedialog as filedialog
+import tkFileDialog as filedialog
 from Tkinter import *
 from tkMessageBox import *
 from ttk import *
