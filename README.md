@@ -1,3 +1,6 @@
+
+[![](https://img.shields.io/badge/python-2.7-brightgreen.svg)]
+[![](https://travis-ci.org/VxCoder/PythonVM.svg?branch=master)]
 # PythonVM
 通过python实现python虚拟机
 
@@ -25,4 +28,3 @@
 5. 从汇编代码中逆推出源代码
 6. co_consts 附带类型
 
-https://travis-ci.org/VxCoder/PythonVM.svg?branch=master
