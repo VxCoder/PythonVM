@@ -1,6 +1,6 @@
 
-[![](https://img.shields.io/badge/python-2.7-brightgreen.svg)]
-[![](https://travis-ci.org/VxCoder/PythonVM.svg?branch=master)]
+![](https://img.shields.io/badge/python-2.7-brightgreen.svg)
+![](https://travis-ci.org/VxCoder/PythonVM.svg?branch=master)
 # PythonVM
 通过python实现python虚拟机
 
